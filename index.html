@@ -463,6 +463,33 @@
 
         // REST endpoints
         const REST_URL = `${SUPABASE_URL}/rest/v1`;
+// Upload a File object to Supabase Storage and return a public URL
+		async function uploadRecipeImage(file) {
+		  if (!file) throw new Error('No file provided');
+
+		  const fileName = `${crypto.randomUUID()}-${file.name}`;
+		  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/recipe-images/${encodeURIComponent(fileName)}`;
+
+		  const res = await fetch(uploadUrl, {
+			method: 'POST',
+			headers: {
+			  'apikey': ANON_KEY,
+			  'Authorization': `Bearer ${ANON_KEY}`,
+			  'x-upsert': 'false',
+			  // IMPORTANT: send the file's real content type
+			  'Content-Type': file.type || 'application/octet-stream'
+			},
+			body: file
+		  });
+
+		  if (!res.ok) {
+			const msg = await res.text();
+			throw new Error(`Storage upload failed: ${res.status} ${msg}`);
+		  }
+
+		  // Public URL (bucket is public)
+		  return `${SUPABASE_URL}/storage/v1/object/public/recipe-images/${encodeURIComponent(fileName)}`;
+		}
 
         // Helper: Supabase REST fetch
         async function supaFetch(
@@ -794,63 +821,86 @@ function closeRecipeModal() {
         }
 
         // Create or update recipe to Supabase
-        async function saveRecipe() {
-            const name = document.getElementById('newRecipeName').value.trim();
-            const category = document.getElementById('newRecipeCategory').value;
-            const servings = parseInt(document.getElementById('newRecipeServings').value);
-            const prepTime = parseInt(document.getElementById('newRecipePrepTime').value);
-            const ingredientsText = document.getElementById('newRecipeIngredients').value;
-            const instructions = document.getElementById('newRecipeInstructions').value;
-            const imageUrlTyped = document.getElementById('newRecipeImageUrl').value.trim();
-            const imagePreview = document.getElementById('imagePreview');
-            const image = imageUrlTyped || (imagePreview.style.display !== 'none' ? imagePreview.src : null);
-            if (!name || !ingredientsText) { alert('Please fill in recipe name and ingredients'); return; }
-            const ingredients = ingredientsText.split('\n').filter(line => line.trim()).map(line => {
-                const parts = line.trim().split(' ');
-                const amount = parseFloat(parts[0]) || 1;
-                const unit = parts[1] || 'units';
-                const item = parts.slice(2).join(' ') || parts.slice(1).join(' ');
-                return { item, amount, unit };
-            });
-            const cu = getCurrentUser();
-            const submitter = cu ? (findUser(cu.username)?.name || cu.username) : 'Unknown';
+		async function saveRecipe() {
+		  try {
+			// form inputs
+			const name = document.getElementById('newRecipeName').value.trim();
+			const category = document.getElementById('newRecipeCategory').value || 'Miscellaneous';
+			const servings = parseInt(document.getElementById('newRecipeServings').value) || 4;
+			const prepTime = parseInt(document.getElementById('newRecipePrepTime').value) || 30;
+			const ingredientsText = document.getElementById('newRecipeIngredients').value || '';
+			const instructions = document.getElementById('newRecipeInstructions').value || '';
+			const imageUrlTyped = document.getElementById('newRecipeImageUrl').value.trim();
+			const fileInput = document.getElementById('recipePhoto');
 
-            const row = {
-                name,
-                category,
-                servings,
-                prep_time: prepTime,
-                ingredients,
-                instructions,
-                image_url: image,
-                submitted_by: submitter,
-                approved: false,
-            };
+			if (!name || !ingredientsText) {
+			  alert('Please fill in name and ingredients');
+			  return;
+			}
 
-            try {
-                if (editingRecipeId) {
-                    await supaFetch('recipes', {
-                        method: 'PATCH',
-                        query: `id=eq.${editingRecipeId}`,
-                        body: row,
-                        headers: { 'Prefer': 'return=representation' }
-                    });
-                } else {
-                    const created = await supaFetch('recipes', {
-                        method: 'POST',
-                        body: row,
-                        headers: { 'Prefer': 'return=representation' }
-                    });
-                    if (Array.isArray(created) && created[0]?.id) { row.id = created[0].id; }
-                }
-                await refreshRecipesFromSupabase();
-                closeAddRecipeModal();
-                // demo admin notify
-                console.log(`[Notify Admin] New/updated recipe submitted by ${submitter}: ${name}`);
-            } catch (e) {
-                alert('Failed to save to Supabase: ' + e.message);
-            }
-        }
+			// Parse ingredients textarea -> array of {item, amount, unit}
+			const ingredients = ingredientsText.split('\n')
+			  .filter(line => line.trim().length)
+			  .map(line => {
+				const parts = line.trim().split(/\s+/);
+				const amount = parseFloat((parts[0] || '0').replace(/[^\d.]/g, '')) || 1;
+				const unit = (parts[1] || '').toLowerCase();
+				const item = parts.slice(2).join(' ') || parts.slice(1).join(' ');
+				return { item, amount, unit };
+			  });
+
+			// Decide final image_url:
+			// 1) if a file is picked, upload to Storage and use its public URL
+			// 2) else, use the typed URL (if any)
+			let image_url = imageUrlTyped;
+			if (fileInput && fileInput.files && fileInput.files[0]) {
+			  image_url = await uploadRecipeImage(fileInput.files[0]);
+			}
+
+			// Who is submitting (your current local user system)
+			const cu = getCurrentUser();
+			const submitted_by = cu ? (findUser(cu.username)?.name || cu.username) : 'guest';
+
+			// Build row for Supabase
+			const row = {
+			  name,
+			  category,
+			  servings,
+			  prep_time: prepTime,
+			  ingredients,
+			  instructions,
+			  image_url,
+			  submitted_by,
+			  approved: false
+			};
+
+			// Create or update?
+			if (editingRecipeId) {
+			  // UPDATE
+			  await supaFetch('recipes', {
+				method: 'PATCH',
+				query: `id=eq.${encodeURIComponent(editingRecipeId)}`,
+				body: row
+			  });
+			  alert('Recipe updated (pending approval).');
+			} else {
+			  // INSERT
+			  await supaFetch('recipes', {
+				method: 'POST',
+				body: row
+			  });
+			  alert(`"${name}" has been added (pending approval).`);
+			}
+
+			await refreshRecipesFromSupabase();
+			closeAddRecipeModal();
+			clearRecipeForm();
+		  } catch (e) {
+			console.error(e);
+			alert('Failed to save: ' + (e.message || e));
+		  }
+		}
+
 		async function approveRecipe(id) {
 			  const r = await fetch('/api/approve', {
 				method: 'POST',
