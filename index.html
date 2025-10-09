@@ -555,7 +555,7 @@
 			  return data;
 			}
 
-        // ===================== Seed & Auth (local demo) =====================
+  /*      // ===================== Seed & Auth (local demo) =====================
         const USERS_KEY = 'nutriplan.users';
         const CURRENT_USER_KEY = 'nutriplan.currentUser';
 
@@ -582,7 +582,75 @@
                 saveUsers(users);
             }
         })();
+*/
+// ===================== User Management (Supabase) =====================
+		const CURRENT_USER_KEY = 'nutriplan.currentUser';
+		let currentUser = null; // Store current logged-in user
 
+		async function loadUserFromSupabase(username) {
+			try {
+				console.log('📥 Loading user from Supabase:', username);
+				
+				// Get all users and find case-insensitive match
+				const allUsers = await supaFetch('users', {
+					method: 'GET',
+					query: 'select=*'
+				});
+
+				// Find user with case-insensitive username match
+				const user = allUsers.find(
+					u => u.username.toLowerCase() === username.toLowerCase()
+				);
+
+				if (user) {
+					console.log('✅ User loaded:', user.username, 'Admin:', user.is_admin);
+				} else {
+					console.warn('⚠️ User not found:', username);
+				}
+
+				return user || null;
+				
+			} catch (e) {
+				console.error('❌ Failed to load user:', e);
+				return null;
+			}
+		}
+
+		function getCurrentUser() {
+			return currentUser;
+		}
+
+		async function setCurrentUser(username) {
+			if (username) {
+				currentUser = await loadUserFromSupabase(username);
+				if (currentUser) {
+					localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ username: currentUser.username }));
+				}
+			} else {
+				currentUser = null;
+				localStorage.removeItem(CURRENT_USER_KEY);
+			}
+			refreshHeaderUser();
+			await refreshRecipesFromSupabase();
+		}
+
+		function findUser(username) {
+			return currentUser && currentUser.username.toLowerCase() === username.toLowerCase() 
+				? currentUser 
+				: null;
+		}
+
+		// Initialize user on page load
+		async function initUser() {
+			try {
+				const stored = JSON.parse(localStorage.getItem(CURRENT_USER_KEY));
+				if (stored && stored.username) {
+					await setCurrentUser(stored.username);
+				}
+			} catch (e) {
+				console.error('Failed to init user:', e);
+			}
+		}
         // ===================== Theme =====================
         function toggleTheme() {
             const body = document.body;
@@ -1251,21 +1319,23 @@
 
         authTrigger.addEventListener('click', () => openAuth('login'));
         profileBtn.addEventListener('click', () => openProfile());
-        logoutBtn.addEventListener('click', () => { setCurrentUser(null); });
+        logoutBtn.addEventListener('click', async () => { 
+			await setCurrentUser(null); 
+			console.log('👋 Logged out');
+		});
 
-        function refreshHeaderUser() {
-            const cu = getCurrentUser();
-            if (!cu) {
-                userControls.style.display = 'none';
-                authTrigger.style.display = 'inline-flex';
-                return;
-            }
-            const full = findUser(cu.username);
-            userControls.style.display = 'flex';
-            authTrigger.style.display = 'none';
-            headerName.textContent = full?.name || cu.username;
-            headerAvatar.src = full?.avatar || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PHJlY3Qgd2lkdGg9JzEwMCUnIGhlaWdodD0nMTAwJScgZmlsbD0nI2NjY2NjYycvPjxjaXJjbGUgY3g9JzMyJyBjeT0nMjQnIHI9JzEyJyBmaWxsPScjODg4ODg4Jy8+PHJlY3QgeD0nMTYnIHk9JzQwJyB3aWR0aD0nMzInIGhlaWdodD0nMTInIHJ4PSc2JyBmaWxsPScjYWFhYWFhJy8+PC9zdmc+';
-        }
+		function refreshHeaderUser() {
+			const cu = getCurrentUser();
+			if (!cu) {
+				userControls.style.display = 'none';
+				authTrigger.style.display = 'inline-flex';
+				return;
+			}
+			userControls.style.display = 'flex';
+			authTrigger.style.display = 'none';
+			headerName.textContent = cu.name || cu.username;
+			headerAvatar.src = cu.avatar_url || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PHJlY3Qgd2lkdGg9JzEwMCUnIGhlaWdodD0nMTAwJScgZmlsbD0nI2NjY2NjYycvPjxjaXJjbGUgY3g9JzMyJyBjeT0nMjQnIHI9JzEyJyBmaWxsPScjODg4ODg4Jy8+PHJlY3QgeD0nMTYnIHk9JzQwJyB3aWR0aD0nMzInIGhlaWdodD0nMTInIHJ4PSc2JyBmaWxsPScjYWFhYWFhJy8+PC9zdmc+';
+		}
 
         function openAuth(mode='login') { switchAuthTab(mode); authModal.classList.add('active'); }
         function closeAuth() { authModal.classList.remove('active'); }
@@ -1287,30 +1357,152 @@
             r.readAsDataURL(f);
         });
 
-        function doRegister() {
-            const username = document.getElementById('regUsername').value.trim();
-            const password = document.getElementById('regPassword').value;
-            const name = document.getElementById('regName').value.trim();
-            const email = document.getElementById('regEmail').value.trim();
-            if (!username || !password) { alert('Username and password are required.'); return; }
-            if (findUser(username)) { alert('Username already exists.'); return; }
-            let avatarData = regAvatarPreview.src || '';
-            const users = loadUsers();
-            users.push({ username, password, name: name || username, email, avatar: avatarData, isAdmin: false });
-            saveUsers(users);
-            setCurrentUser({ username });
-            closeAuth();
-        }
+		async function doRegister() {
+			const username = document.getElementById('regUsername').value.trim();
+			const password = document.getElementById('regPassword').value;
+			const name = document.getElementById('regName').value.trim();
+			const email = document.getElementById('regEmail').value.trim();
+			
+			if (!username || !password) { 
+				alert('❌ Username and password are required.'); 
+				return; 
+			}
+
+			// Validate username length
+			if (username.length < 3) {
+				alert('❌ Username must be at least 3 characters long.');
+				return;
+			}
+
+			// Validate password length
+			if (password.length < 4) {
+				alert('❌ Password must be at least 4 characters long.');
+				return;
+			}
+
+			try {
+				console.log('🔍 Checking if username exists (case-insensitive):', username);
+				
+				// Check if username exists (case-insensitive)
+				// The database index will handle this, but we check first for better UX
+				const usersResult = await supaFetch('users', {
+					method: 'GET',
+					query: 'select=username'
+				});
+
+				// Check if any existing username matches case-insensitively
+				const existingUser = usersResult.find(
+					u => u.username.toLowerCase() === username.toLowerCase()
+				);
+
+				if (existingUser) {
+					alert(`❌ Username "${existingUser.username}" already exists. Please choose a different username.`);
+					return;
+				}
+
+				console.log('✅ Username available');
+
+				// Upload avatar if selected
+				let avatarUrl = '';
+				const avatarFile = regAvatar.files[0];
+				if (avatarFile) {
+					try {
+						console.log('📤 Uploading avatar...');
+						avatarUrl = await uploadRecipeImage(avatarFile);
+						console.log('✅ Avatar uploaded:', avatarUrl);
+					} catch (e) {
+						console.warn('⚠️ Avatar upload failed:', e);
+						// Continue registration even if avatar fails
+					}
+				}
+
+				console.log('📝 Creating new user...');
+
+				// Insert new user
+				const result = await supaFetch('users', {
+					method: 'POST',
+					body: {
+						username,
+						password, // WARNING: In production, hash this with bcrypt!
+						name: name || username,
+						email,
+						avatar_url: avatarUrl,
+						is_admin: false
+					}
+				});
+
+				console.log('✅ User registered:', result);
+				
+				// Log in the new user
+				await setCurrentUser(username);
+				closeAuth();
+				alert(`✅ Welcome ${name || username}! Registration successful!`);
+				
+			} catch (e) {
+				console.error('❌ Registration failed:', e);
+				
+				// Check if it's a unique constraint violation
+				if (e.message.includes('duplicate key') || e.message.includes('users_username_lower_idx')) {
+					alert('❌ This username already exists (case-insensitive). Please choose a different username.');
+				} else {
+					alert('❌ Registration failed: ' + e.message);
+				}
+			}
+		}
 
         // Login
-        function doLogin() {
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value;
-            const u = findUser(username);
-            if (!u || u.password !== password) { alert('Invalid username or password'); return; }
-            setCurrentUser({ username: u.username });
-            closeAuth();
-        }
+		async function doLogin() {
+			const username = document.getElementById('loginUsername').value.trim();
+			const password = document.getElementById('loginPassword').value;
+			
+			if (!username || !password) {
+				alert('❌ Please enter both username and password.');
+				return;
+			}
+			
+			try {
+				console.log('🔐 Attempting login for:', username);
+				
+				// Get all users and find case-insensitive match
+				const allUsers = await supaFetch('users', {
+					method: 'GET',
+					query: 'select=*'
+				});
+
+				// Find user with case-insensitive username match
+				const user = allUsers.find(
+					u => u.username.toLowerCase() === username.toLowerCase()
+				);
+
+				if (!user) {
+					console.warn('❌ User not found:', username);
+					alert('❌ Invalid username or password');
+					return;
+				}
+
+				if (user.password !== password) {
+					console.warn('❌ Invalid password for user:', username);
+					alert('❌ Invalid username or password');
+					return;
+				}
+
+				console.log('✅ Login successful for:', user.username);
+				
+				// Use the actual username from database (correct casing)
+				await setCurrentUser(user.username);
+				closeAuth();
+				
+				// Clear form
+				document.getElementById('loginUsername').value = '';
+				document.getElementById('loginPassword').value = '';
+				
+				alert(`✅ Welcome back, ${user.name || user.username}!`);
+				
+			} catch (e) {
+				console.error('❌ Login failed:', e);
+				alert('❌ Login failed: ' + e.message);
+			}
+		}
 
         // Profile
         function openProfile() {
@@ -1362,14 +1554,14 @@
         [authModal, profileModal, document.getElementById('addRecipeModal')].forEach(m => {
             m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
         });
-
-        // Initial load
-        (async function init() {
-            refreshHeaderUser();
-            renderPantry();
-            renderMealPlanner();
-            await refreshRecipesFromSupabase();
-        })();
+		// Initial load
+		(async function init() {
+			await initUser();
+			refreshHeaderUser();
+			renderPantry();
+			renderMealPlanner();
+			await refreshRecipesFromSupabase();
+		})();
     </script>
 </body>
 </html>
