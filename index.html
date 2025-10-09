@@ -639,51 +639,67 @@
 
         
 // ---------- Modal helpers ----------
-function openRecipeModal(recipeId) {
-  const r = recipes.find(x => String(x.id) === String(recipeId));
-  if (!r) return;
+		function openRecipeModal(recipeId) {
+		  const r = recipes.find(x => String(x.id) === String(recipeId));
+		  if (!r) return;
 
-  const img = r.image ? `<img src="${r.image}" alt="${r.name}" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:10px;">` : '';
-  const ing = (r.ingredients || []).map(i => `<li>${i.amount} ${i.unit} ${i.item}</li>`).join('');
-  const instr = (r.instructions || '').replace(/\n/g, '<br>');
+		  console.log('📖 Opening recipe modal:', r.name, 'Approved:', r.approved);
 
-  document.getElementById('rdmTitle').textContent = r.name;
-  document.getElementById('rdmBody').innerHTML = `
-    ${img}
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-      <span class="recipe-category">${r.category}${r.approved ? '' : ' • Pending'}</span>
-      <span>👥 ${r.servings} servings</span>
-      <span>⏱️ ${r.prepTime} mins</span>
-      <span>🧑‍🍳 ${r.submittedBy || 'Unknown'}</span>
-    </div>
-    <h3 style="margin:8px 0 6px;">Ingredients</h3>
-    <ul class="ingredients-list" style="max-height:220px;overflow:auto;">${ing || '<li>No ingredients recorded.</li>'}</ul>
-    <h3 style="margin:10px 0 6px;">Instructions</h3>
-    <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:260px;overflow:auto;">${instr || 'No instructions provided.'}</div>
-    <div style="display:flex;gap:8px;margin-top:12px;">
-      <button class="btn btn-small" onclick="addToMealPlan('${r.id}')">Add to Meal Plan</button>
-      ${!r.approved && (findUser(getCurrentUser()?.username)?.isAdmin)
-        ? `<button class="btn btn-secondary btn-small" onclick="approveRecipe('${r.id}')">Approve</button>`
-        : ''
-      }
-      <button class="btn btn-secondary btn-small" onclick="printRecipe('${r.id}')">Print</button>
-      <button class="btn btn-danger btn-small" onclick="deleteRecipe('${r.id}')">Delete</button>
-    </div>
-  `;
-  document.getElementById('recipeDetailsModal').classList.add('active');
-}
+		  const img = r.image ? `<img src="${r.image}" alt="${r.name}" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:10px;">` : '';
+		  const ing = (r.ingredients || []).map(i => `<li>${i.amount} ${i.unit} ${i.item}</li>`).join('');
+		  const instr = (r.instructions || '').replace(/\n/g, '<br>');
 
-function closeRecipeModal() {
-  document.getElementById('recipeDetailsModal').classList.remove('active');
-  document.getElementById('rdmTitle').textContent = '';
-  document.getElementById('rdmBody').innerHTML = '';
-}
+		  // Check if current user is admin
+		  const cu = getCurrentUser();
+		  const user = cu ? findUser(cu.username) : null;
+		  const isAdmin = user?.isAdmin || false;
+		  
+		  console.log('👤 Current user:', cu?.username, 'Is Admin:', isAdmin, 'Recipe approved:', r.approved);
+
+		  document.getElementById('rdmTitle').textContent = r.name;
+		  document.getElementById('rdmBody').innerHTML = `
+			${img}
+			<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+			  <span class="recipe-category">${r.category}${r.approved ? '' : ' • Pending'}</span>
+			  <span>👥 ${r.servings} servings</span>
+			  <span>⏱️ ${r.prepTime} mins</span>
+			  <span>🧑‍🍳 ${r.submittedBy || 'Unknown'}</span>
+			</div>
+			<h3 style="margin:8px 0 6px;">Ingredients</h3>
+			<ul class="ingredients-list" style="max-height:220px;overflow:auto;">${ing || '<li>No ingredients recorded.</li>'}</ul>
+			<h3 style="margin:10px 0 6px;">Instructions</h3>
+			<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:260px;overflow:auto;">${instr || 'No instructions provided.'}</div>
+			<div style="display:flex;gap:8px;margin-top:12px;">
+			  <button class="btn btn-small" onclick="addToMealPlan('${r.id}')">Add to Meal Plan</button>
+			  ${(!r.approved && isAdmin)
+				? `<button class="btn btn-secondary btn-small" onclick="approveRecipe('${r.id}')">✅ Approve</button>`
+				: ''
+			  }
+			  <button class="btn btn-secondary btn-small" onclick="printRecipe('${r.id}')">Print</button>
+			  <button class="btn btn-danger btn-small" onclick="deleteRecipe('${r.id}')">Delete</button>
+			</div>
+		  `;
+		  document.getElementById('recipeDetailsModal').classList.add('active');
+		}
+
+		function closeRecipeModal() {
+		  document.getElementById('recipeDetailsModal').classList.remove('active');
+		  document.getElementById('rdmTitle').textContent = '';
+		  document.getElementById('rdmBody').innerHTML = '';
+		}
 
 		// ---------- Grid rendering (string IDs + modal triggers) ----------
 		function renderRecipes() {
 		  const grid = document.getElementById('recipeGrid');
 		  const favoritesOnly = document.getElementById('favoritesOnly').checked;
 		  const categoryFilter = document.getElementById('categoryFilter').value;
+
+		  // Check if current user is admin
+		  const cu = getCurrentUser();
+		  const user = cu ? findUser(cu.username) : null;
+		  const isAdmin = user?.isAdmin || false;
+		  
+		  console.log('🎨 Rendering recipes. Admin:', isAdmin, 'Total recipes:', recipes.length);
 
 		  let filteredRecipes = recipes;
 		  if (favoritesOnly) filteredRecipes = filteredRecipes.filter(r => r.isFavorite);
@@ -702,8 +718,8 @@ function closeRecipeModal() {
 					<button class="icon-btn ${recipe.isFavorite ? 'active' : ''}" onclick="toggleFavorite('${recipe.id}')" title="Favorite">
 					  ${recipe.isFavorite ? '❤️' : '🤍'}
 					</button>
-					${!recipe.approved && findUser(getCurrentUser()?.username)?.isAdmin
-					  ? `<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve">✅</button>`
+					${(!recipe.approved && isAdmin)
+					  ? `<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>`
 					  : ''
 					}
 					<button class="icon-btn" onclick="editRecipe('${recipe.id}')" title="Edit">✏️</button>
@@ -711,16 +727,7 @@ function closeRecipeModal() {
 					<button class="icon-btn" onclick="deleteRecipe('${recipe.id}')" title="Delete" style="color: var(--danger);">🗑️</button>
 				  </div>
 				</div>
-				<div class="recipe-category">${recipe.category}${recipe.approved ? '' : ' • Pending'}</div>
-				<div class="recipe-info">
-				  <div>👥 Servings: ${recipe.servings}</div>
-				  <div>⏱️ Prep Time: ${recipe.prepTime} mins</div>
-				  <div>🧑‍🍳 Submitted by: ${recipe.submittedBy || 'Unknown'}</div>
-				</div>
-				<ul class="ingredients-list">
-				  ${(recipe.ingredients || []).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
-				</ul>
-				<button class="btn btn-small" onclick="addToMealPlan('${recipe.id}')">Add to Meal Plan</button>
+				<!-- rest of card... -->
 			  </div>
 			</div>
 		  `).join('');
@@ -927,27 +934,64 @@ function closeRecipeModal() {
 		}
 
 		async function approveRecipe(id) {
-			  const r = await fetch('/api/approve', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_KEY },
-				body: JSON.stringify({ id })
-			  });
-			  if (!r.ok) throw new Error(await r.text());
-			  await refreshRecipesFromSupabase();
-			  alert('Approved.');
+		  try {
+			console.log('🔄 Approving recipe ID:', id);
+			
+			// Check if user is admin
+			const cu = getCurrentUser();
+			const user = cu ? findUser(cu.username) : null;
+			
+			console.log('👤 User check - Username:', cu?.username, 'Is Admin:', user?.isAdmin);
+			
+			if (!user || !user.isAdmin) {
+			  alert('❌ Only admins can approve recipes');
+			  return;
 			}
-
-        async function deleteRecipe(id) {
-            if (!confirm('Delete this recipe?')) return;
-            try {
-                await supaFetch('recipes', { method: 'DELETE', query: `id=eq.${id}` });
-                recipes = recipes.filter(r => r.id !== id);
-                Object.keys(mealPlan).forEach(day => { mealPlan[day] = mealPlan[day].filter(x => x !== id); });
-                renderRecipes(); renderMealPlanner();
-            } catch(e) {
-                alert('Failed to delete: ' + e.message);
-            }
-        }
+			
+			if (!confirm('Approve this recipe?')) return;
+			
+			console.log('📤 Sending PATCH request to approve...');
+			
+			// Update directly via Supabase REST API
+			const result = await supaFetch('recipes', {
+			  method: 'PATCH',
+			  query: `id=eq.${encodeURIComponent(String(id))}`,
+			  body: { approved: true }
+			});
+			
+			console.log('✅ Approve result:', result);
+			
+			// Update local state
+			const recipe = recipes.find(r => String(r.id) === String(id));
+			if (recipe) {
+			  recipe.approved = true;
+			  console.log('✅ Local recipe updated - approved:', recipe.approved);
+			} else {
+			  console.warn('⚠️ Recipe not found in local state');
+			}
+			
+			// Refresh from database to ensure sync
+			console.log('🔄 Refreshing recipes from database...');
+			await refreshRecipesFromSupabase();
+			
+			// Re-render the grid
+			renderRecipes();
+			
+			// Update modal if it's still open
+			const modal = document.getElementById('recipeDetailsModal');
+			if (modal.classList.contains('active')) {
+			  console.log('🔄 Updating open modal...');
+			  // Reopen the modal with updated data
+			  closeRecipeModal();
+			  setTimeout(() => openRecipeModal(id), 100);
+			}
+			
+			alert('✅ Recipe approved successfully!');
+		  } catch (e) {
+			console.error('❌ Approve failed:', e);
+			alert('Failed to approve recipe:\n\n' + (e.message || e));
+		  }
+		}
 
         // Fetch recipes: approved OR submitted_by == current user
         async function refreshRecipesFromSupabase() {
