@@ -453,7 +453,7 @@
 		<div id="rdmBody"></div>
 	  </div>
 	</div>
-
+	<input type="file" id="hiddenRecipeImageInput" accept="image/*" style="display:none">
     <script>
         // ===================== Supabase Config (fill these) =====================
         const SUPABASE_URL = 'https://aopdcjovyaogxctskyqe.supabase.co';
@@ -463,34 +463,59 @@
 
         // REST endpoints
         const REST_URL = `${SUPABASE_URL}/rest/v1`;
-// Upload a File object to Supabase Storage and return a public URL
+		// Upload a File to Supabase Storage and return a public URL
 		async function uploadRecipeImage(file) {
 		  if (!file) throw new Error('No file provided');
-
 		  const fileName = `${crypto.randomUUID()}-${file.name}`;
 		  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/recipe-images/${encodeURIComponent(fileName)}`;
 
 		  const res = await fetch(uploadUrl, {
 			method: 'POST',
 			headers: {
-			  'apikey': ANON_KEY,
-			  'Authorization': `Bearer ${ANON_KEY}`,
+			  apikey: ANON_KEY,
+			  Authorization: `Bearer ${ANON_KEY}`,
 			  'x-upsert': 'false',
-			  // IMPORTANT: send the file's real content type
 			  'Content-Type': file.type || 'application/octet-stream'
 			},
 			body: file
 		  });
+		  if (!res.ok) throw new Error(await res.text());
 
-		  if (!res.ok) {
-			const msg = await res.text();
-			throw new Error(`Storage upload failed: ${res.status} ${msg}`);
-		  }
-
-		  // Public URL (bucket is public)
+		  // Public URL (bucket is Public)
 		  return `${SUPABASE_URL}/storage/v1/object/public/recipe-images/${encodeURIComponent(fileName)}`;
 		}
+		// Open file picker, then upload + patch image_url automatically
+		function promptChangeRecipeImage(recipeId) {
+		  const input = document.getElementById('hiddenRecipeImageInput');
+		  input.value = ''; // reset
+		  input.onchange = async (e) => {
+			try {
+			  const file = e.target.files?.[0];
+			  if (!file) return;
+			  const publicUrl = await uploadRecipeImage(file);
 
+			  await supaFetch('recipes', {
+				method: 'PATCH',
+				query: `id=eq.${encodeURIComponent(String(recipeId))}`,
+				body: { image_url: publicUrl }
+			  });
+
+			  // refresh local state and UI
+			  const r = recipes.find(x => String(x.id) === String(recipeId));
+			  if (r) r.image = publicUrl, r.image_url = publicUrl;
+			  if (typeof refreshRecipesFromSupabase === 'function') {
+				await refreshRecipesFromSupabase();
+			  } else {
+				renderRecipes?.();
+			  }
+			  alert('Image updated.');
+			} catch (err) {
+			  console.error(err);
+			  alert('Failed to update image: ' + (err.message || err));
+			}
+		  };
+		  input.click();
+		}
         // Helper: Supabase REST fetch
         async function supaFetch(
 			  path,
