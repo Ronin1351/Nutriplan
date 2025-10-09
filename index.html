@@ -209,6 +209,7 @@
             <button class="tab" onclick="switchTab(this,'pantry')">🥫 Pantry</button>
             <button class="tab" onclick="switchTab(this,'planner')">📅 Meal Planner</button>
             <button class="tab" onclick="switchTab(this,'shopping')">🛒 Shopping List</button>
+			<button class="tab" id="approvalTab" onclick="switchTab(this,'approval')" style="display:none;">✅ Approval</button>
         </div>
 
         <div id="recipes" class="tab-content active">
@@ -276,6 +277,18 @@
                 <div id="shoppingItems"></div>
             </div>
         </div>
+				<!-- Approval Tab (Admin Only) -->
+		<div id="approval" class="tab-content">
+			<div style="background: var(--bg-secondary); border-radius: 12px; padding: 25px;">
+				<h2>🔍 Pending Recipes (Admin Approval)</h2>
+				<p class="muted" style="margin-bottom:20px;">Review and approve recipes submitted by users.</p>
+				<div class="recipe-grid" id="approvalGrid"></div>
+				<div id="noPendingMessage" style="text-align:center;padding:40px;color:var(--text-secondary);display:none;">
+					<h3>✅ No pending recipes!</h3>
+					<p>All recipes have been reviewed.</p>
+				</div>
+			</div>
+		</div>
     </div>
 
     <footer class="no-print">
@@ -667,15 +680,21 @@
         if (themeBtnInit) themeBtnInit.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
 
         // ===================== Tabs =====================
-        function switchTab(el, tabName) {
-            const tabs = document.querySelectorAll('.tab');
-            const contents = document.querySelectorAll('.tab-content');
-            tabs.forEach(tab => tab.classList.remove('active'));
-            contents.forEach(content => content.classList.remove('active'));
-            if (el) el.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-            if (tabName === 'shopping') updateShoppingList();
-        }
+		function switchTab(el, tabName) {
+			const tabs = document.querySelectorAll('.tab');
+			const contents = document.querySelectorAll('.tab-content');
+			tabs.forEach(tab => tab.classList.remove('active'));
+			contents.forEach(content => content.classList.remove('active'));
+			if (el) el.classList.add('active');
+			document.getElementById(tabName).classList.add('active');
+			
+			// Special handling for different tabs
+			if (tabName === 'shopping') {
+				updateShoppingList();
+			} else if (tabName === 'approval') {
+				renderApprovalGrid();
+			}
+		}
 
         // ===================== Recipes / Pantry / Planner (in-memory for UI) =====================
         let recipes = []; // will be hydrated from Supabase
@@ -800,7 +819,144 @@
 			</div>
 		  `).join('');
 		}
-
+		// Render pending recipes for admin approval
+function renderApprovalGrid() {
+    const grid = document.getElementById('approvalGrid');
+    const noMessage = document.getElementById('noPendingMessage');
+    
+    // Filter only pending recipes
+    const pendingRecipes = recipes.filter(r => !r.approved);
+    
+    console.log('📋 Rendering approval grid. Pending recipes:', pendingRecipes.length);
+    
+    if (pendingRecipes.length === 0) {
+        grid.innerHTML = '';
+        noMessage.style.display = 'block';
+        return;
+    }
+    
+    noMessage.style.display = 'none';
+    
+    grid.innerHTML = pendingRecipes.map(recipe => `
+        <div class="recipe-card" style="border: 2px solid var(--warning);">
+            ${recipe.image
+                ? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
+                : `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+            }
+            <div class="recipe-content">
+                <div class="recipe-header">
+                    <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
+                    <div class="recipe-actions">
+                        <button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
+                        <button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
+                    </div>
+                </div>
+                <div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING APPROVAL</div>
+                <div class="recipe-info">
+                    <div>👥 Servings: ${recipe.servings}</div>
+                    <div>⏱️ Prep Time: ${recipe.prepTime} mins</div>
+                    <div>🧑‍🍳 Submitted by: ${recipe.submittedBy || 'Unknown'}</div>
+                </div>
+                <ul class="ingredients-list">
+                    ${(recipe.ingredients || []).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
+                </ul>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button class="btn btn-small" onclick="openRecipeModal('${recipe.id}')">View Details</button>
+                    <button class="btn btn-small" onclick="approveRecipe('${recipe.id}')" style="background:var(--accent);">✅ Approve</button>
+                    <button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+// Render pending recipes for admin approval
+		function renderApprovalGrid() {
+			const grid = document.getElementById('approvalGrid');
+			const noMessage = document.getElementById('noPendingMessage');
+			
+			// Filter only pending recipes
+			const pendingRecipes = recipes.filter(r => !r.approved);
+			
+			console.log('📋 Rendering approval grid. Pending recipes:', pendingRecipes.length);
+			
+			if (pendingRecipes.length === 0) {
+				grid.innerHTML = '';
+				noMessage.style.display = 'block';
+				return;
+			}
+			
+			noMessage.style.display = 'none';
+			
+			grid.innerHTML = pendingRecipes.map(recipe => `
+				<div class="recipe-card" style="border: 2px solid var(--warning);">
+					${recipe.image
+						? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
+						: `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+					}
+					<div class="recipe-content">
+						<div class="recipe-header">
+							<div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
+							<div class="recipe-actions">
+								<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
+								<button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
+							</div>
+						</div>
+						<div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING APPROVAL</div>
+						<div class="recipe-info">
+							<div>👥 Servings: ${recipe.servings}</div>
+							<div>⏱️ Prep Time: ${recipe.prepTime} mins</div>
+							<div>🧑‍🍳 Submitted by: ${recipe.submittedBy || 'Unknown'}</div>
+						</div>
+						<ul class="ingredients-list">
+							${(recipe.ingredients || []).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
+						</ul>
+						<div style="display:flex;gap:8px;margin-top:10px;">
+							<button class="btn btn-small" onclick="openRecipeModal('${recipe.id}')">View Details</button>
+							<button class="btn btn-small" onclick="approveRecipe('${recipe.id}')" style="background:var(--accent);">✅ Approve</button>
+							<button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
+						</div>
+					</div>
+				</div>
+			`).join('');
+		}
+		
+		async function rejectRecipe(id) {
+			if (!confirm('Reject and delete this recipe permanently?')) return;
+			
+			try {
+				console.log('❌ Rejecting recipe ID:', id);
+				
+				const cu = getCurrentUser();
+				if (!cu || !cu.is_admin) {
+					alert('Only admins can reject recipes');
+					return;
+				}
+				
+				await supaFetch('recipes', { 
+					method: 'DELETE', 
+					query: `id=eq.${encodeURIComponent(String(id))}` 
+				});
+				
+				console.log('✅ Recipe rejected and deleted');
+				
+				// Remove from local state
+				recipes = recipes.filter(r => String(r.id) !== String(id));
+				
+				// Refresh UI
+				renderApprovalGrid();
+				
+				// Close modal if open
+				const modal = document.getElementById('recipeDetailsModal');
+				if (modal.classList.contains('active')) {
+					closeRecipeModal();
+				}
+				
+				alert('✅ Recipe rejected and deleted!');
+			} catch(e) {
+				console.error('❌ Reject failed:', e);
+				alert('Failed to reject: ' + e.message);
+			}
+		}
 		// ---------- Meal planner (string-safe) ----------
 		function renderMealPlanner() {
 		  const container = document.getElementById('mealPlanner');
@@ -1044,14 +1200,15 @@
 			
 			// Re-render the grid
 			renderRecipes();
-			
+			renderApprovalGrid();
+
 			// Update modal if it's still open
 			const modal = document.getElementById('recipeDetailsModal');
 			if (modal.classList.contains('active')) {
-			  console.log('🔄 Updating open modal...');
-			  // Reopen the modal with updated data
-			  closeRecipeModal();
-			  setTimeout(() => openRecipeModal(id), 100);
+				console.log('🔄 Updating open modal...');
+				// Reopen the modal with updated data
+				closeRecipeModal();
+				setTimeout(() => openRecipeModal(id), 100);
 			}
 			
 			alert('✅ Recipe approved successfully!');
@@ -1060,87 +1217,142 @@
 			alert('Failed to approve recipe:\n\n' + (e.message || e));
 		  }
 		}
-
-        // Fetch recipes: approved OR submitted_by == current user
-        async function refreshRecipesFromSupabase() {
-            const cu = getCurrentUser();
-            const me = cu ? (findUser(cu.username)?.name || cu.username) : '_none_';
-            const or = encodeURIComponent(`approved.eq.true,submitted_by.eq.${me}`);
-            const select = encodeURIComponent('id,name,category,servings,prep_time,ingredients,instructions,image_url,submitted_by,approved,created_at');
-            const query = `select=${select}&or=(${or})&order=created_at.desc`;
-            try {
-                const rows = await supaFetch('recipes', { method: 'GET', query });
-                recipes = rows.map(rowToRecipe);
-                renderRecipes();
-            } catch(e) {
-                console.warn('Supabase load failed:', e.message);
-                // Optional: show local seed if nothing loaded
-                if (recipes.length === 0) {
-                    
-                    recipes = [
-                        {
-                            id: 1,
-                            name: "Spaghetti Carbonara",
-                            category: "Pasta",
-                            servings: 4,
-                            prepTime: 20,
-                            isFavorite: true,
-                            image: null,
-                            ingredients: [
-                                { item: "spaghetti", amount: 400, unit: "g" },
-                                { item: "eggs", amount: 4, unit: "units" },
-                                { item: "bacon", amount: 200, unit: "g" },
-                                { item: "parmesan cheese", amount: 100, unit: "g" },
-                                { item: "black pepper", amount: 1, unit: "tsp" }
-                            ],
-                            instructions: "1. Cook spaghetti according to package directions\n2. Fry bacon until crispy\n3. Beat eggs with parmesan\n4. Toss hot pasta with bacon and egg mixture\n5. Season with black pepper",
-                            submittedBy: "System",
-                            approved: true
-                        },
-                        {
-                            id: 2,
-                            name: "Chicken Stir Fry",
-                            category: "Chicken",
-                            servings: 4,
-                            prepTime: 25,
-                            isFavorite: false,
-                            image: null,
-                            ingredients: [
-                                { item: "chicken breast", amount: 500, unit: "g" },
-                                { item: "mixed vegetables", amount: 300, unit: "g" },
-                                { item: "soy sauce", amount: 3, unit: "tbsp" },
-                                { item: "garlic", amount: 3, unit: "units" },
-                                { item: "ginger", amount: 1, unit: "tbsp" }
-                            ],
-                            instructions: "1. Slice chicken and veggies\n2. Stir-fry chicken until browned\n3. Add vegetables and sauces\n4. Cook until crisp-tender",
-                            submittedBy: "System",
-                            approved: true
-                        },
-                        {
-                            id: 3,
-                            name: "Greek Salad",
-                            category: "Vegetarian",
-                            servings: 2,
-                            prepTime: 15,
-                            isFavorite: false,
-                            image: null,
-                            ingredients: [
-                                { item: "cucumber", amount: 1, unit: "units" },
-                                { item: "tomatoes", amount: 3, unit: "units" },
-                                { item: "red onion", amount: 0.5, unit: "units" },
-                                { item: "feta cheese", amount: 150, unit: "g" },
-                                { item: "olives", amount: 100, unit: "g" }
-                            ],
-                            instructions: "1. Chop vegetables\n2. Toss with olive oil and lemon\n3. Add feta and olives\n4. Season to taste",
-                            submittedBy: "System",
-                            approved: true
-                        }
-                    ];
-
-                    renderRecipes();
-                }
-            }
-        }
+		async function deleteRecipe(id) {
+			if (!confirm('Delete this recipe permanently?')) return;
+			
+			try {
+				console.log('🗑️ Deleting recipe ID:', id);
+				
+				await supaFetch('recipes', { 
+					method: 'DELETE', 
+					query: `id=eq.${encodeURIComponent(String(id))}` 
+				});
+				
+				console.log('✅ Recipe deleted from database');
+				
+				// Remove from local state
+				recipes = recipes.filter(r => String(r.id) !== String(id));
+				
+				// Remove from meal plan
+				Object.keys(mealPlan).forEach(day => { 
+					mealPlan[day] = mealPlan[day].filter(x => String(x) !== String(id)); 
+				});
+				
+				// Refresh from database to ensure sync
+				await refreshRecipesFromSupabase();
+				
+				// Refresh UI
+				renderRecipes(); 
+				renderMealPlanner();
+				
+				// Close modal if open
+				const modal = document.getElementById('recipeDetailsModal');
+				if (modal.classList.contains('active')) {
+					closeRecipeModal();
+				}
+				
+				alert('✅ Recipe deleted successfully!');
+			} catch(e) {
+				console.error('❌ Delete failed:', e);
+				alert('Failed to delete: ' + e.message);
+			}
+		}
+		async function rejectRecipe(id) {
+			if (!confirm('Reject and delete this recipe permanently?')) return;
+			
+			try {
+				console.log('❌ Rejecting recipe ID:', id);
+				
+				const cu = getCurrentUser();
+				if (!cu || !cu.is_admin) {
+					alert('❌ Only admins can reject recipes');
+					return;
+				}
+				
+				await supaFetch('recipes', { 
+					method: 'DELETE', 
+					query: `id=eq.${encodeURIComponent(String(id))}` 
+				});
+				
+				console.log('✅ Recipe rejected and deleted');
+				
+				// Remove from local state
+				recipes = recipes.filter(r => String(r.id) !== String(id));
+				
+				// Refresh UI
+				renderApprovalGrid();
+				renderRecipes();
+				
+				// Close modal if open
+				const modal = document.getElementById('recipeDetailsModal');
+				if (modal.classList.contains('active')) {
+					closeRecipeModal();
+				}
+				
+				alert('✅ Recipe rejected and deleted!');
+			} catch(e) {
+				console.error('❌ Reject failed:', e);
+				alert('Failed to reject: ' + e.message);
+			}
+		}
+		// Fetch recipes: approved OR submitted_by == current user OR user is admin
+		async function refreshRecipesFromSupabase() {
+			const cu = getCurrentUser();
+			const isAdmin = cu?.is_admin || false;
+			
+			console.log('🔄 Refreshing recipes from Supabase. User:', cu?.username, 'Admin:', isAdmin);
+			
+			const select = encodeURIComponent('id,name,category,servings,prep_time,ingredients,instructions,image_url,submitted_by,approved,created_at');
+			
+			let query;
+			if (isAdmin) {
+				// Admins see everything
+				query = `select=${select}&order=created_at.desc`;
+				console.log('👑 Admin mode - loading all recipes');
+				
+				// Show approval tab for admin
+				document.getElementById('approvalTab').style.display = 'block';
+			} else if (cu) {
+				// Regular users see: approved recipes OR their own submissions
+				const me = cu.name || cu.username;
+				const or = encodeURIComponent(`approved.eq.true,submitted_by.eq.${me}`);
+				query = `select=${select}&or=(${or})&order=created_at.desc`;
+				console.log('👤 User mode - loading approved + own recipes');
+				
+				// Hide approval tab for non-admin
+				document.getElementById('approvalTab').style.display = 'none';
+			} else {
+				// Not logged in: only see approved
+				query = `select=${select}&approved=eq.true&order=created_at.desc`;
+				console.log('👻 Guest mode - loading approved only');
+				
+				// Hide approval tab
+				document.getElementById('approvalTab').style.display = 'none';
+			}
+			
+			try {
+				const rows = await supaFetch('recipes', { method: 'GET', query });
+				recipes = rows.map(rowToRecipe);
+				renderRecipes();
+				console.log(`✅ Loaded ${recipes.length} recipes`);
+				
+				// Log pending count for admin
+				if (isAdmin) {
+					const pendingCount = recipes.filter(r => !r.approved).length;
+					console.log(`📊 Admin view - ${pendingCount} pending recipes`);
+					
+					// Update approval tab badge (optional)
+					const approvalTab = document.getElementById('approvalTab');
+					if (pendingCount > 0) {
+						approvalTab.textContent = `✅ Approval (${pendingCount})`;
+					} else {
+						approvalTab.textContent = '✅ Approval';
+					}
+				}
+			} catch(e) {
+				console.warn('❌ Supabase load failed:', e.message);
+			}
+		}
 
         // TheMealDB integration -> save to Supabase
         async function fetchApiRecipes() {
