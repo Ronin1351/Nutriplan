@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meal Planner & Recipe Manager — Nutriplan (Supabase)</title>
+    <title>Meal Planner & Recipe Manager – Nutriplan (Supabase)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -116,17 +116,19 @@
         .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-top: 20px; }
         .recipe-card { background: var(--bg-secondary); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px var(--shadow); transition: transform 0.3s, box-shadow 0.3s; }
         .recipe-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px var(--shadow); }
-        .recipe-image { width: 100%; height: 200px; object-fit: cover; background: var(--bg-tertiary); }
-        .recipe-image-placeholder { width: 100%; height: 200px; background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary)); display: flex; align-items: center; justify-content: center; font-size: 3em; opacity: 0.5; }
+        .recipe-image { width: 100%; height: 200px; object-fit: cover; background: var(--bg-tertiary); cursor: pointer; }
+        .recipe-image-placeholder { width: 100%; height: 200px; background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary)); display: flex; align-items: center; justify-content: center; font-size: 3em; opacity: 0.5; cursor: pointer; }
         .recipe-content { padding: 20px; }
         .recipe-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; }
-        .recipe-title { font-size: 1.3em; font-weight: 600; color: var(--text-primary); flex: 1; }
+        .recipe-title { font-size: 1.3em; font-weight: 600; color: var(--text-primary); flex: 1; cursor: pointer; }
+        .recipe-title:hover { color: var(--accent); }
         .recipe-actions { display: flex; gap: 8px; }
         .icon-btn { background: none; border: none; font-size: 1.3em; cursor: pointer; transition: transform 0.2s, opacity 0.2s; color: var(--text-secondary); }
         .icon-btn:hover { transform: scale(1.2); opacity: 0.8; }
         .icon-btn.active { color: #ff6b6b; }
-        .icon-btn[title="Delete"]:hover { color: var(--danger); transform: scale(1.3); }
+        .icon-btn[title*="Delete"]:hover, .icon-btn[title*="Remove"]:hover { color: var(--danger); transform: scale(1.3); }
         .recipe-category { display: inline-block; background: var(--accent); color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9em; margin-bottom: 10px; }
+        .recipe-info { display: flex; gap: 15px; margin: 10px 0; color: var(--text-secondary); font-size: 0.95em; }
         .ingredients-list { margin: 15px 0; padding-left: 20px; max-height: 150px; overflow-y: auto; }
         .ingredients-list li { margin: 5px 0; color: var(--text-secondary); }
         .btn { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 1em; transition: all 0.3s; font-weight: 500; }
@@ -166,7 +168,6 @@
 
         select { padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); cursor: pointer; }
 
-        /* Modal (shared) */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); justify-content: center; align-items: center; z-index: 1000; }
         .modal.active { display: flex; }
         .modal-content { background: var(--bg-primary); padding: 30px; border-radius: 12px; max-width: 640px; width: 92%; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border); box-shadow: 0 4px 16px var(--shadow); }
@@ -182,9 +183,47 @@
 
         .avatar-preview { width: 64px; height: 64px; border-radius: 50%; background: var(--bg-tertiary); object-fit: cover; }
 
+        .star-rating { display: inline-flex; gap: 2px; align-items: center; }
+        .star { font-size: 1.2em; }
+        .star.interactive { cursor: pointer; transition: transform 0.2s; }
+        .star.interactive:hover { transform: scale(1.2); }
+
         footer { display: block; width: 100%; margin-top: 40px; padding: 20px; text-align: center; background: transparent; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 0.95em; box-shadow: none; position: relative; z-index: 10; }
-        footer .copyright { font-weight: 400; color: var(--text-secondary); font-size: 0.95em; letter-spacing: 0; text-transform: none; text-shadow: none; }
+        footer .copyright { font-weight: 400; color: var(--text-secondary); font-size: 0.95em; }
         .small { font-size: 0.9em; color: var(--text-secondary); }
+		@keyframes slideIn {
+			from {
+				transform: translateX(100%);
+				opacity: 0;
+			}
+			to {
+				transform: translateX(0);
+				opacity: 1;
+			}
+		}
+
+		@keyframes slideOut {
+			from {
+				transform: translateX(0);
+				opacity: 1;
+			}
+			to {
+				transform: translateX(100%);
+				opacity: 0;
+			}
+		}
+		.star.interactive { 
+			cursor: pointer; 
+			transition: transform 0.2s, filter 0.2s;
+		}
+		.star.interactive:hover { 
+			transform: scale(1.3);
+			filter: brightness(1.2);
+		}
+		.star.interactive:hover {
+			transform: scale(1.3) rotate(15deg); /* Add rotation! */
+			filter: brightness(1.2) drop-shadow(0 0 8px gold);
+		}
     </style>
 </head>
 <body>
@@ -192,13 +231,13 @@
         <header>
             <h1>🍳 Nutriplan</h1>
             <div class="right-controls">
-                <button id="authTrigger" class="btn btn-secondary no-print" title="Register / Log in">Register / Log in</button>
+                <button id="authTrigger" class="btn btn-secondary no-print">Register / Log in</button>
                 <div id="userControls" class="no-print" style="display:none;">
-                    <button class="avatar-btn" id="profileBtn" title="Profile">
+                    <button class="avatar-btn" id="profileBtn">
                         <img id="headerAvatar" alt="avatar">
                         <span id="headerName">User</span>
                     </button>
-                    <button class="linklike" id="logoutBtn" title="Log out">Log out</button>
+                    <button class="linklike" id="logoutBtn">Log out</button>
                 </div>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
             </div>
@@ -209,7 +248,7 @@
             <button class="tab" onclick="switchTab(this,'pantry')">🥫 Pantry</button>
             <button class="tab" onclick="switchTab(this,'planner')">📅 Meal Planner</button>
             <button class="tab" onclick="switchTab(this,'shopping')">🛒 Shopping List</button>
-			<button class="tab" id="approvalTab" onclick="switchTab(this,'approval')" style="display:none;">✅ Approval</button>
+            <button class="tab" id="approvalTab" onclick="switchTab(this,'approval')" style="display:none;">✅ Approval</button>
         </div>
 
         <div id="recipes" class="tab-content active">
@@ -236,6 +275,7 @@
                     <label for="favoritesOnly">Show Favorites Only</label>
                 </div>
                 <button class="btn" onclick="guardedShowAddRecipeModal()">+ Add Recipe</button>
+				<button class="btn" onclick="openImportModal()">📥 Import from URL</button> <!-- ⭐ ADD THIS LINE -->
                 <small class="small">Select a category to browse online recipes (TheMealDB). Saved items go to Supabase.</small>
             </div>
             <div id="apiRecipesContainer"></div>
@@ -277,18 +317,18 @@
                 <div id="shoppingItems"></div>
             </div>
         </div>
-				<!-- Approval Tab (Admin Only) -->
-		<div id="approval" class="tab-content">
-			<div style="background: var(--bg-secondary); border-radius: 12px; padding: 25px;">
-				<h2>🔍 Pending Recipes (Admin Approval)</h2>
-				<p class="muted" style="margin-bottom:20px;">Review and approve recipes submitted by users.</p>
-				<div class="recipe-grid" id="approvalGrid"></div>
-				<div id="noPendingMessage" style="text-align:center;padding:40px;color:var(--text-secondary);display:none;">
-					<h3>✅ No pending recipes!</h3>
-					<p>All recipes have been reviewed.</p>
-				</div>
-			</div>
-		</div>
+
+        <div id="approval" class="tab-content">
+            <div style="background: var(--bg-secondary); border-radius: 12px; padding: 25px;">
+                <h2>📋 Pending Recipes (Admin Approval)</h2>
+                <p class="muted" style="margin-bottom:20px;">Review and approve recipes submitted by users.</p>
+                <div class="recipe-grid" id="approvalGrid"></div>
+                <div id="noPendingMessage" style="text-align:center;padding:40px;color:var(--text-secondary);display:none;">
+                    <h3>✅ No pending recipes!</h3>
+                    <p>All recipes have been reviewed.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <footer class="no-print">
@@ -326,11 +366,10 @@
             <div class="form-group">
                 <label>Photo (URL or choose)</label>
                 <input type="url" id="newRecipeImageUrl" placeholder="https://...">
-                <div class="file-upload-wrapper" style="margin-top:8px;">
-                    <label for="recipePhoto" class="file-upload-label">📷 Choose Photo</label>
+                <div style="margin-top:8px;">
                     <input type="file" id="recipePhoto" accept="image/*" onchange="previewImage(event)">
                 </div>
-                <img id="imagePreview" class="image-preview" style="display: none; max-width: 100%; border-radius: 8px;">
+                <img id="imagePreview" style="display: none; max-width: 100%; border-radius: 8px; margin-top: 10px;">
             </div>
             <div class="form-group">
                 <label>Servings</label>
@@ -342,7 +381,7 @@
             </div>
             <div class="form-group">
                 <label>Ingredients (one per line with amount)</label>
-                <textarea id="newRecipeIngredients" placeholder="2 cups flour&#10;1 tsp salt&#10;3 eggs"></textarea>
+                <textarea id="newRecipeIngredients" placeholder="2 cups flour&#10;1 tsp salt&#10;3 eggs" rows="6"></textarea>
             </div>
             <div class="form-group">
                 <label>Instructions</label>
@@ -362,7 +401,6 @@
                 <div id="loginTab" class="auth-tab active" onclick="switchAuthTab('login')">Log in</div>
                 <div id="registerTab" class="auth-tab" onclick="switchAuthTab('register')">Register</div>
             </div>
-            <!-- Login -->
             <div id="loginPane">
                 <div class="form-group">
                     <label>Username</label>
@@ -377,7 +415,6 @@
                     <button class="btn" onclick="doLogin()">Log in</button>
                 </div>
             </div>
-            <!-- Register -->
             <div id="registerPane" style="display:none;">
                 <div class="form-row">
                     <div class="form-group">
@@ -411,7 +448,6 @@
                     <button class="btn" onclick="doRegister()">Create account</button>
                 </div>
             </div>
-            
         </div>
     </div>
 
@@ -456,248 +492,1710 @@
             <p class="muted" id="adminBadge" style="margin-top:10px; display:none;">You are signed in as <b>Admin</b>.</p>
         </div>
     </div>
-		<!-- Recipe Details Modal -->
-	<div class="modal" id="recipeDetailsModal">
-	  <div class="modal-content">
-		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-		  <h2 id="rdmTitle" style="margin:0;font-size:1.2rem;"></h2>
-		  <button class="btn btn-secondary" onclick="closeRecipeModal()">Close</button>
-		</div>
-		<div id="rdmBody"></div>
-	  </div>
-	</div>
-	<input type="file" id="hiddenRecipeImageInput" accept="image/*" style="display:none">
+
+    <!-- Recipe Details Modal -->
+    <div class="modal" id="recipeDetailsModal">
+        <div class="modal-content">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <h2 id="rdmTitle" style="margin:0;"></h2>
+                <button class="btn btn-secondary" onclick="closeRecipeModal()">Close</button>
+            </div>
+            <div id="rdmBody"></div>
+        </div>
+    </div>
+
+    <input type="file" id="hiddenRecipeImageInput" accept="image/*" style="display:none">
+
     <script>
-        // ===================== Supabase Config (fill these) =====================
+        // ===================== Supabase Config =====================
         const SUPABASE_URL = 'https://aopdcjovyaogxctskyqe.supabase.co';
-        const ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcGRjam92eWFvZ3hjdHNreXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MTQ5OTQsImV4cCI6MjA3NTQ5MDk5NH0.uNXmb-q2qizjks__9kmXaKD7SxeoW_ed1md6vSjS-gQ';
-        const ADMIN_KEY = '1da20beb2268590b67f186fb491fb390292c3887d859d982df810209da7fb610'; // for future admin-only actions if needed
-	    //(crypto.getRandomValues(new Uint8Array(32)).reduce((s,b)=>s+('0'+b.toString(16)).slice(-2), ''))
-
-        // REST endpoints
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcGRjam92eWFvZ3hjdHNreXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MTQ5OTQsImV4cCI6MjA3NTQ5MDk5NH0.uNXmb-q2qizjks__9kmXaKD7SxeoW_ed1md6vSjS-gQ';
         const REST_URL = `${SUPABASE_URL}/rest/v1`;
-		// Upload a File to Supabase Storage and return a public URL
-		async function uploadRecipeImage(file) {
-		  if (!file) throw new Error('No file provided');
-		  const fileName = `${crypto.randomUUID()}-${file.name}`;
-		  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/recipe-images/${encodeURIComponent(fileName)}`;
 
-		  const res = await fetch(uploadUrl, {
-			method: 'POST',
-			headers: {
-			  apikey: ANON_KEY,
-			  Authorization: `Bearer ${ANON_KEY}`,
-			  'x-upsert': 'false',
-			  'Content-Type': file.type || 'application/octet-stream'
-			},
-			body: file
-		  });
-		  if (!res.ok) throw new Error(await res.text());
+        // ===================== Helper Functions =====================
+        async function uploadRecipeImage(file) {
+            if (!file) throw new Error('No file provided');
+            const fileName = `${crypto.randomUUID()}-${file.name}`;
+            const uploadUrl = `${SUPABASE_URL}/storage/v1/object/recipe-images/${encodeURIComponent(fileName)}`;
 
-		  // Public URL (bucket is Public)
-		  return `${SUPABASE_URL}/storage/v1/object/public/recipe-images/${encodeURIComponent(fileName)}`;
-		}
-		// Open file picker, then upload + patch image_url automatically
-		function promptChangeRecipeImage(recipeId) {
-		  const input = document.getElementById('hiddenRecipeImageInput');
-		  input.value = ''; // reset
-		  input.onchange = async (e) => {
-			try {
-			  const file = e.target.files?.[0];
-			  if (!file) return;
-			  const publicUrl = await uploadRecipeImage(file);
-
-			  await supaFetch('recipes', {
-				method: 'PATCH',
-				query: `id=eq.${encodeURIComponent(String(recipeId))}`,
-				body: { image_url: publicUrl }
-			  });
-
-			  // refresh local state and UI
-			  const r = recipes.find(x => String(x.id) === String(recipeId));
-			  if (r) r.image = publicUrl, r.image_url = publicUrl;
-			  if (typeof refreshRecipesFromSupabase === 'function') {
-				await refreshRecipesFromSupabase();
-			  } else {
-				renderRecipes?.();
-			  }
-			  alert('Image updated.');
-			} catch (err) {
-			  console.error(err);
-			  alert('Failed to update image: ' + (err.message || err));
-			}
-		  };
-		  input.click();
-		}
-        // Helper: Supabase REST fetch
-        async function supaFetch(
-			  path,
-			  { method = 'GET', query = null, body = null, headers = {} } = {}
-			) {
-			  const qs =
-				query == null
-				  ? ''
-				  : (typeof query === 'string'
-					  ? `?${query}`
-					  : `?${new URLSearchParams(query).toString()}`);
-
-			  const res = await fetch(`${REST_URL}/${path}${qs}`, {
-				method,
-				headers: {
-				  apikey: ANON_KEY,
-				  Authorization: `Bearer ${ANON_KEY}`,
-				  'Content-Type': 'application/json',
-				  'Accept-Profile': 'public',
-				  // Only matters on write ops (POST/PATCH/DELETE)
-				  ...(method !== 'GET' ? { Prefer: 'return=representation' } : {}),
-				  ...headers
-				},
-				body: body ? JSON.stringify(body) : null
-			  });
-
-			  if (res.status === 204) return null;
-
-			  const ct = res.headers.get('content-type') || '';
-			  const data = ct.includes('application/json') ? await res.json() : await res.text();
-
-			  if (!res.ok) {
-				const msg = typeof data === 'object' ? JSON.stringify(data) : String(data);
-				throw new Error(`Supabase error ${res.status}: ${msg}`);
-			  }
-
-			  return data;
-			}
-
-  /*      // ===================== Seed & Auth (local demo) =====================
-        const USERS_KEY = 'nutriplan.users';
-        const CURRENT_USER_KEY = 'nutriplan.currentUser';
-
-        function loadUsers() { try { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; } catch { return []; } }
-        function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
-        function getCurrentUser() { try { return JSON.parse(localStorage.getItem(CURRENT_USER_KEY)); } catch { return null; } }
-        function setCurrentUser(user) {
-            if (user) localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ username: user.username }));
-            else localStorage.removeItem(CURRENT_USER_KEY);
-            refreshHeaderUser();
-            // Pull fresh recipes each time auth changes
-            refreshRecipesFromSupabase().catch(err => console.warn(err));
-        }
-        function findUser(username) {
-            const users = loadUsers();
-            return users.find(u => u.username.toLowerCase() === String(username).toLowerCase());
+            const res = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    apikey: ANON_KEY,
+                    Authorization: `Bearer ${ANON_KEY}`,
+                    'x-upsert': 'false',
+                    'Content-Type': file.type || 'application/octet-stream'
+                },
+                body: file
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return `${SUPABASE_URL}/storage/v1/object/public/recipe-images/${encodeURIComponent(fileName)}`;
         }
 
-        // Seed admin if missing
-        (function seedAdmin() {
-            const users = loadUsers();
-            if (!users.some(u => u.isAdmin)) {
-                users.push({ username: 'admin', password: 'admin', name: 'Administrator', email: '', avatar: '', isAdmin: true });
-                saveUsers(users);
+        async function supaFetch(path, { method = 'GET', query = null, body = null, headers = {} } = {}) {
+            const qs = query == null ? '' : (typeof query === 'string' ? `?${query}` : `?${new URLSearchParams(query).toString()}`);
+            const res = await fetch(`${REST_URL}/${path}${qs}`, {
+                method,
+                headers: {
+                    apikey: ANON_KEY,
+                    Authorization: `Bearer ${ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Accept-Profile': 'public',
+                    ...(method !== 'GET' ? { Prefer: 'return=representation' } : {}),
+                    ...headers
+                },
+                body: body ? JSON.stringify(body) : null
+            });
+
+            if (res.status === 204) return null;
+            const ct = res.headers.get('content-type') || '';
+            const data = ct.includes('application/json') ? await res.json() : await res.text();
+
+            if (!res.ok) {
+                const msg = typeof data === 'object' ? JSON.stringify(data) : String(data);
+                throw new Error(`Supabase error ${res.status}: ${msg}`);
             }
-        })();
-*/
-// ===================== User Management (Supabase) =====================
-		const CURRENT_USER_KEY = 'nutriplan.currentUser';
-		let currentUser = null; // Store current logged-in user
+            return data;
+        }
 
-		async function loadUserFromSupabase(username) {
-			try {
-				console.log('📥 Loading user from Supabase:', username);
-				
-				// Get all users and find case-insensitive match
-				const allUsers = await supaFetch('users', {
-					method: 'GET',
-					query: 'select=*'
-				});
+        // ===================== User Management =====================
+        const CURRENT_USER_KEY = 'nutriplan.currentUser';
+        let currentUser = null;
+// openImportModal()
+function openImportModal() {
+  let modal = document.getElementById('import-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'import-modal';
+    modal.className = 'modal';
 
-				// Find user with case-insensitive username match
-				const user = allUsers.find(
-					u => u.username.toLowerCase() === username.toLowerCase()
-				);
+    modal.innerHTML = `
+      <div class="modal-content">
+        <h2>📥 Import Recipe from URL</h2>
+        <p class="small">Paste a recipe URL from any cooking website</p>
 
-				if (user) {
-					console.log('✅ User loaded:', user.username, 'Admin:', user.is_admin);
-				} else {
-					console.warn('⚠️ User not found:', username);
-				}
+        <div class="form-group">
+          <label>Recipe URL</label>
+          <input type="url" id="import-url-input" placeholder="https://example.com/recipe">
+        </div>
 
-				return user || null;
-				
-			} catch (e) {
-				console.error('❌ Failed to load user:', e);
-				return null;
-			}
-		}
+        <div class="form-group">
+          <button class="btn" id="import-parse-btn" disabled>Parse Recipe</button>
+          <span id="import-status" class="small" style="margin-left:10px;"></span>
+        </div>
 
-		function getCurrentUser() {
-			return currentUser;
-		}
+        <div id="import-preview" style="display:none; margin:20px 0; padding:15px; background:var(--bg-secondary); border-radius:8px;">
+          <!-- Preview will be inserted here -->
+        </div>
 
-		async function setCurrentUser(username) {
-			if (username) {
-				currentUser = await loadUserFromSupabase(username);
-				if (currentUser) {
-					localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ username: currentUser.username }));
-				}
-			} else {
-				currentUser = null;
-				localStorage.removeItem(CURRENT_USER_KEY);
-			}
-			refreshHeaderUser();
-			await refreshRecipesFromSupabase();
-		}
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+          <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+          <button class="btn" id="import-save-btn" disabled style="display:none;">Save Recipe</button>
+        </div>
+      </div>
+    `;
 
-		function findUser(username) {
-			return currentUser && currentUser.username.toLowerCase() === username.toLowerCase() 
-				? currentUser 
-				: null;
-		}
+    document.body.appendChild(modal);
 
-		// Initialize user on page load
-		async function initUser() {
-			try {
-				const stored = JSON.parse(localStorage.getItem(CURRENT_USER_KEY));
-				if (stored && stored.username) {
-					await setCurrentUser(stored.username);
-				}
-			} catch (e) {
-				console.error('Failed to init user:', e);
-			}
-		}
+    // Wire up event handlers
+    const urlInput = modal.querySelector('#import-url-input');
+    const parseBtn = modal.querySelector('#import-parse-btn');
+    const saveBtn  = modal.querySelector('#import-save-btn');
+    const statusEl = modal.querySelector('#import-status');
+    const preview  = modal.querySelector('#import-preview');
+
+    // Enable parse button when valid URL entered
+    urlInput.addEventListener('input', () => {
+      const isValid = urlInput.value.trim() && /^https?:\/\/.+/.test(urlInput.value.trim());
+      parseBtn.disabled = !isValid;
+    });
+
+    // Parse button click
+    parseBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      statusEl.textContent = '🔍 Parsing recipe...';
+      statusEl.style.color = '';
+      parseBtn.disabled = true;
+      preview.style.display = 'none';
+      saveBtn.style.display = 'none';
+      saveBtn.disabled = true;
+
+      try {
+        const draft = await importFromUrl(url);
+
+        // Show preview (enhanced)
+        preview.innerHTML = `
+          <div style="border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
+            <h3 style="margin: 0 0 10px 0;">${draft.name}</h3>
+            ${draft.image_url ? `
+              <img src="${draft.image_url}"
+                   style="max-width: 100%; max-height: 200px; border-radius: 8px; margin: 10px 0; display: block;"
+                   onerror="this.style.display='none'">
+            ` : ''}
+            <div style="display: grid; gap: 8px; margin: 10px 0;">
+              <div><strong>Category:</strong> ${draft.category}</div>
+              <div><strong>Servings:</strong> ${draft.servings} | <strong>Prep:</strong> ${draft.prep_time} mins</div>
+            </div>
+            <details style="margin: 10px 0;">
+              <summary style="cursor: pointer; font-weight: 600;">
+                Ingredients (${draft.ingredients.length})
+              </summary>
+              <ul class="ingredients-list" style="max-height: 150px; margin-top: 10px;">
+                ${draft.ingredients.map(i =>
+                  `<li>${i.amount ?? ''} ${i.unit ?? ''} ${i.item ?? ''}`.trim()
+                ).join('')}
+              </ul>
+            </details>
+            <details style="margin: 10px 0;">
+              <summary style="cursor: pointer; font-weight: 600;">Instructions</summary>
+              <div style="max-height: 200px; overflow-y: auto; margin-top: 10px; white-space: pre-wrap;">
+                ${draft.instructions || 'No instructions found'}
+              </div>
+            </details>
+          </div>
+        `;
+        preview.style.display = 'block';
+
+        // Store draft for save button
+        saveBtn._draft = draft;
+        saveBtn.style.display = 'inline-block';
+        saveBtn.disabled = false;
+
+        statusEl.textContent = '✅ Recipe parsed! Review and save.';
+        statusEl.style.color = 'var(--accent)';
+      } catch (error) {
+        console.error('Import failed:', error);
+        statusEl.textContent = '❌ Failed: ' + (error?.message || 'Unknown error');
+        statusEl.style.color = 'var(--danger)';
+        parseBtn.disabled = false;
+      }
+    });
+
+    // Save button click (wire once)
+    saveBtn.addEventListener('click', async () => {
+      if (!saveBtn._draft) return;
+
+      statusEl.textContent = '💾 Saving recipe...';
+      statusEl.style.color = '';
+      saveBtn.disabled = true;
+
+      try {
+        await saveImportedRecipe(saveBtn._draft);
+        statusEl.textContent = '✅ Recipe saved successfully!';
+        statusEl.style.color = 'var(--accent)';
+
+        setTimeout(() => {
+          closeImportModal();
+          alert('Recipe imported successfully! 🎉');
+        }, 1200);
+      } catch (error) {
+        console.error('Save failed:', error);
+        statusEl.textContent = '❌ Save failed: ' + (error?.message || 'Unknown error');
+        statusEl.style.color = 'var(--danger)';
+        saveBtn.disabled = false;
+      }
+    });
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeImportModal();
+    });
+  }
+
+  // Show modal
+  modal.classList.add('active');
+
+  // Reset form
+  const urlInput = modal.querySelector('#import-url-input');
+  const parseBtn = modal.querySelector('#import-parse-btn');
+  const saveBtn  = modal.querySelector('#import-save-btn');
+  const statusEl = modal.querySelector('#import-status');
+  const preview  = modal.querySelector('#import-preview');
+
+  urlInput.value = '';
+  parseBtn.disabled = true;
+  saveBtn.style.display = 'none';
+  saveBtn.disabled = true;
+  statusEl.textContent = '';
+  statusEl.style.color = '';
+  preview.style.display = 'none';
+
+  setTimeout(() => urlInput.focus(), 100);
+}
+// Placement: put this function BEFORE saveRecipe() in your Nutriplan.html
+// closeImportModal()
+function closeImportModal() {
+    const modal = document.getElementById('import-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+// ===================== SIMPLIFIED IMPORT PIPELINE =====================
+// ===================== EXTRACTION METHODS =====================
+// extractFromJsonLd(doc)
+function extractFromJsonLd(doc) {
+    const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    
+    for (const script of scripts) {
+        try {
+            const data = JSON.parse(script.textContent);
+            const recipe = findRecipeInJsonLd(data);
+            if (recipe) return recipe;
+        } catch (e) {
+            continue;
+        }
+    }
+    return null;
+}
+// findRecipeInJsonLd(data)
+function findRecipeInJsonLd(data) {
+    // Handle arrays
+    if (Array.isArray(data)) {
+        for (const item of data) {
+            const found = findRecipeInJsonLd(item);
+            if (found) return found;
+        }
+        return null;
+    }
+    
+    // Handle objects
+    if (data && typeof data === 'object') {
+        // Check if this is a Recipe
+        const type = data['@type'];
+        if (type && (type === 'Recipe' || (Array.isArray(type) && type.includes('Recipe')))) {
+            return {
+                name: data.name,
+                image: data.image?.url || data.image,
+                recipeIngredient: data.recipeIngredient || [],
+                recipeInstructions: extractInstructions(data.recipeInstructions),
+                recipeYield: data.recipeYield,
+                recipeCuisine: data.recipeCuisine,
+                prepTime: data.prepTime,
+                cookTime: data.cookTime,
+                totalTime: data.totalTime
+            };
+        }
+        
+        // Check nested structures
+        if (data['@graph']) return findRecipeInJsonLd(data['@graph']);
+        if (data.mainEntity) return findRecipeInJsonLd(data.mainEntity);
+    }
+    
+    return null;
+}
+// extractInstructions(instructions)
+function extractInstructions(instructions) {
+    if (!instructions) return '';
+    
+    if (typeof instructions === 'string') return instructions;
+    
+    if (Array.isArray(instructions)) {
+        return instructions.map(step => {
+            if (typeof step === 'string') return step;
+            if (step.text) return step.text;
+            if (step.name) return step.name;
+            return '';
+        }).filter(Boolean).join('\n');
+    }
+    
+    if (instructions.text) return instructions.text;
+    
+    return '';
+}
+// extractFromMicrodata(doc)
+function extractFromMicrodata(doc) {
+    const recipeEl = doc.querySelector('[itemscope][itemtype*="schema.org/Recipe"]');
+    if (!recipeEl) return null;
+    
+    const getProp = (prop) => {
+        const el = recipeEl.querySelector(`[itemprop="${prop}"]`);
+        if (!el) return null;
+        return el.getAttribute('content') || el.textContent || '';
+    };
+    
+    const getAllProps = (prop) => {
+        const elements = recipeEl.querySelectorAll(`[itemprop="${prop}"]`);
+        return Array.from(elements).map(el => 
+            el.getAttribute('content') || el.textContent || ''
+        ).filter(Boolean);
+    };
+    
+    return {
+        name: getProp('name'),
+        image: getProp('image'),
+        recipeIngredient: getAllProps('recipeIngredient'),
+        recipeInstructions: getAllProps('recipeInstructions').join('\n'),
+        recipeYield: getProp('recipeYield'),
+        recipeCuisine: getProp('recipeCuisine'),
+        prepTime: getProp('prepTime'),
+        cookTime: getProp('cookTime'),
+        totalTime: getProp('totalTime')
+    };
+}
+
+// ===================== NORMALIZATION =====================
+
+// normalizeRecipe(raw, sourceUrl)
+function normalizeRecipe(raw, sourceUrl) {
+    const cu = getCurrentUser();
+    
+    // Parse time (ISO duration or plain number)
+    const parseTime = (time) => {
+        if (!time) return 0;
+        if (typeof time === 'number') return Math.round(time);
+        
+        // Handle ISO 8601 durations like PT30M, PT1H30M
+        const match = time.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+        if (match) {
+            const hours = parseInt(match[1] || 0);
+            const mins = parseInt(match[2] || 0);
+            return hours * 60 + mins;
+        }
+        
+        return 0;
+    };
+    
+    const prepTime = parseTime(raw.prepTime);
+    const cookTime = parseTime(raw.cookTime);
+    const totalTime = parseTime(raw.totalTime);
+    const prep_time = totalTime || prepTime + cookTime || prepTime || 30;
+    
+    // Parse ingredients
+    const ingredients = (raw.recipeIngredient || []).map(line => {
+        return parseIngredientLine(line.trim());
+    }).filter(ing => ing.item);
+    
+    // Parse servings
+    const servings = (() => {
+        const yieldStr = String(raw.recipeYield || '4');
+        const match = yieldStr.match(/(\d+)/);
+        return match ? parseInt(match[1]) : 4;
+    })();
+    
+    // Category
+    const category = raw.recipeCuisine || 'Miscellaneous';
+    
+    // Image
+    let image_url = '';
+    if (raw.image) {
+        if (typeof raw.image === 'string') {
+            image_url = raw.image;
+        } else if (raw.image.url) {
+            image_url = raw.image.url;
+        }
+    }
+    
+    // Make absolute URL
+    if (image_url && !/^https?:\/\//i.test(image_url)) {
+        try {
+            image_url = new URL(image_url, sourceUrl).toString();
+        } catch (e) {
+            image_url = '';
+        }
+    }
+    
+    return {
+        name: raw.name.trim(),
+        category,
+        servings,
+        prep_time,
+        ingredients,
+        instructions: raw.recipeInstructions || '',
+        image_url,
+        submitted_by: cu ? (cu.name || cu.username) : 'anonymous',
+        approved: false
+    };
+}
+// parseIngredientLine(line)
+function parseIngredientLine(line) {
+    // Simple parser: "2 cups flour" -> {amount: 2, unit: 'cup', item: 'flour'}
+    
+    // Remove unicode fractions
+    const fractionMap = {'½': '0.5', '¼': '0.25', '¾': '0.75', '⅓': '0.33', '⅔': '0.67'};
+    line = line.replace(/[½¼¾⅓⅔]/g, m => fractionMap[m] || m);
+    
+    // Extract leading number (including fractions like "1 1/2")
+    const amountMatch = line.match(/^(\d+(?:\s+\d+\/\d+)?|\d+\/\d+|\d+\.?\d*)/);
+    let amount = 1;
+    let remaining = line;
+    
+    if (amountMatch) {
+        const amountStr = amountMatch[1];
+        
+        // Handle mixed fractions like "1 1/2"
+        if (/\d+\s+\d+\/\d+/.test(amountStr)) {
+            const parts = amountStr.split(/\s+/);
+            const whole = parseInt(parts[0]);
+            const frac = parts[1].split('/');
+            amount = whole + parseInt(frac[0]) / parseInt(frac[1]);
+        }
+        // Handle simple fractions like "1/2"
+        else if (/\d+\/\d+/.test(amountStr)) {
+            const frac = amountStr.split('/');
+            amount = parseInt(frac[0]) / parseInt(frac[1]);
+        }
+        // Handle decimals
+        else {
+            amount = parseFloat(amountStr);
+        }
+        
+        remaining = line.slice(amountMatch[0].length).trim();
+    }
+    
+    // Extract unit
+    const unitMap = {
+        'tsp': 'tsp', 'teaspoon': 'tsp', 'teaspoons': 'tsp',
+        'tbsp': 'tbsp', 'tablespoon': 'tbsp', 'tablespoons': 'tbsp',
+        'cup': 'cup', 'cups': 'cup',
+        'oz': 'oz', 'ounce': 'oz', 'ounces': 'oz',
+        'lb': 'lb', 'pound': 'lb', 'pounds': 'lb',
+        'g': 'g', 'gram': 'g', 'grams': 'g',
+        'kg': 'kg', 'kilogram': 'kg', 'kilograms': 'kg',
+        'ml': 'ml', 'l': 'L'
+    };
+    
+    let unit = '';
+    const tokens = remaining.split(/\s+/);
+    const firstToken = tokens[0]?.toLowerCase();
+    
+    if (firstToken && unitMap[firstToken]) {
+        unit = unitMap[firstToken];
+        remaining = tokens.slice(1).join(' ');
+    }
+    
+    // Remove "of" after unit
+    remaining = remaining.replace(/^of\s+/i, '');
+    
+    return {
+        amount: Math.round(amount * 100) / 100, // Round to 2 decimals
+        unit,
+        item: remaining.trim()
+    };
+}
+
+// maybeCacheImage(imageUrl)
+async function maybeCacheImage(imageUrl) {
+  // No Supabase dependency. If you have a custom uploader (e.g., uploadRecipeImage),
+  // we'll use it; otherwise we return the original URL.
+  if (!imageUrl || !/^https?:/i.test(imageUrl)) return imageUrl;
+
+  // If you expose an uploader that accepts a File/Blob and returns a public URL, use it.
+  if (typeof uploadRecipeImage !== 'function') {
+    return imageUrl;
+  }
+
+  const fetchWithTimeout = async (u, ms = 15000) => {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms);
+    try {
+      const resp = await fetch(u, { signal: ctrl.signal, mode: 'cors', credentials: 'omit' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp;
+    } finally {
+      clearTimeout(id);
+    }
+  };
+
+  const guessExt = (contentType, urlStr) => {
+    const ct = (contentType || '').toLowerCase();
+    if (/image\/webp/.test(ct)) return 'webp';
+    if (/image\/jpe?g/.test(ct)) return 'jpg';
+    if (/image\/png/.test(ct)) return 'png';
+    if (/image\/gif/.test(ct)) return 'gif';
+    const m = (urlStr || '').toLowerCase().match(/\.(webp|jpe?g|png|gif)(?:[\?#]|$)/);
+    return m ? (m[1] === 'jpeg' ? 'jpg' : m[1]) : 'jpg';
+  };
+
+  try {
+    const resp = await fetchWithTimeout(imageUrl);
+    const contentType = resp.headers.get('content-type') || 'image/jpeg';
+    const blob = await resp.blob();
+    if (!blob || !blob.size) throw new Error('Empty image blob');
+
+    // Convert to File if needed by your uploader
+    const ext = guessExt(contentType, imageUrl);
+    const file = new File([blob], `imported.${ext}`, { type: contentType });
+
+    // Expect uploadRecipeImage(file) -> public URL string
+    const publicUrl = await uploadRecipeImage(file);
+    return typeof publicUrl === 'string' && publicUrl ? publicUrl : imageUrl;
+  } catch (e) {
+    console.warn('maybeCacheImage fallback:', e?.message || e);
+    return imageUrl;
+  }
+}
+// saveImportedRecipe(draft)
+
+// ===================== SAVE FUNCTION =====================
+// saveImportedRecipe(draft)
+// saveImportedRecipe(draft)
+async function saveImportedRecipe(draft) {
+  const statusEl = document.querySelector('#import-status');
+  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+
+  const cu = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  if (!cu) throw new Error('Please log in to import recipes');
+
+  setStatus('Validating…');
+
+  // Basic validate
+  if (!draft?.name?.trim()) throw new Error('Recipe name is required');
+  if (!Array.isArray(draft.ingredients) || draft.ingredients.length === 0) {
+    throw new Error('At least one ingredient is required');
+  }
+
+  // Optional: image upload/cache
+  let image_url = draft.image_url || '';
+  if (image_url && /^https?:/i.test(image_url) && typeof uploadRecipeImage === 'function') {
+    try {
+      setStatus('Uploading image…');
+      const resp = await fetch(image_url);
+      const blob = await resp.blob();
+      const file = new File([blob], 'imported-image.jpg', { type: blob.type || 'image/jpeg' });
+      image_url = await uploadRecipeImage(file);
+    } catch (e) {
+      console.warn('Image upload failed, using original URL:', e);
+    }
+  }
+
+  // Dedupe (optional but recommended)
+
+  // Build payload
+  const payload = {
+    name: draft.name,
+    category: draft.category || 'Miscellaneous',
+    servings: Number.isFinite(draft.servings) ? draft.servings : 4,
+    prep_time: Number.isFinite(draft.prep_time) ? draft.prep_time : 30,
+    ingredients: draft.ingredients,
+    instructions: draft.instructions || '',
+    image_url,
+    submitted_by: (cu.email || cu.username || cu.name || 'anonymous'),
+    approved: false,
+  };
+
+  // Insert
+  setStatus('Saving recipe…');
+  const result = await (async () => {
+    if (typeof supaFetch !== 'function') {
+      throw new Error('No backend helper found (supaFetch).');
+    }
+    // Prefer explicit JSON
+    return await supaFetch('recipes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  })();
+
+  const recipeId = Array.isArray(result) ? result[0]?.id : result?.id;
+
+  // Link to user collection (best-effort)
+  if (recipeId && cu?.id && typeof supaFetch === 'function') {
+    try {
+      setStatus('Linking to your collection…');
+      await supaFetch('user_recipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: cu.id, recipe_id: recipeId })
+      });
+    } catch (e) {
+      console.log('Already in collection or error:', e);
+    }
+  }
+
+  // Refresh UI
+  setStatus('Refreshing…');
+  if (typeof refreshRecipesFromSupabase === 'function') {
+    await refreshRecipesFromSupabase();
+  }
+
+  // Done + close
+  setStatus('Saved.');
+  if (typeof closeImportModal === 'function') closeImportModal();
+}
+// Placement: put this function BEFORE saveRecipe() in your Nutriplan.html
+
+// resolveUrl(url)
+function resolveUrl(url) {
+  // Normalize, validate, and sanitize a user-provided URL for importing recipes.
+  // - Adds https:// if missing
+  // - Only allows http/https
+  // - Lowercases host
+  // - Removes fragments, credentials, default ports
+  // - Collapses // in path, trims trailing slash
+  // - Strips common tracking params (utm_*, gclid, fbclid, etc.)
+  // - Lightly de-AMPs paths like /amp/
+
+  const raw = String(url || '').trim();
+  if (!raw) throw new Error('Empty URL');
+
+  // Prepend scheme if missing
+  let candidate = raw;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate)) {
+    candidate = 'https://' + candidate.replace(/^\/+/, '');
+  }
+
+  let u;
+  try {
+    u = new URL(candidate);
+  } catch {
+    throw new Error('Invalid URL');
+  }
+
+  // Allow only http/https
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    throw new Error('Unsupported protocol; use http(s) URLs only.');
+  }
+
+  // Sanitize components
+  u.hash = '';                // remove fragment
+  u.username = '';            // remove credentials
+  u.password = '';
+  if ((u.protocol === 'http:' && u.port === '80') ||
+      (u.protocol === 'https:' && u.port === '443')) {
+    u.port = '';              // drop default ports
+  }
+  u.hostname = u.hostname.toLowerCase();
+
+  // Clean path
+  u.pathname = u.pathname.replace(/\/{2,}/g, '/'); // collapse //
+  // simple AMP cleanup
+  u.pathname = u.pathname
+    .replace(/\/amp\/?$/i, '/')
+    .replace(/\/amp(\/|$)/i, '/');
+  if (u.pathname.length > 1) {
+    u.pathname = u.pathname.replace(/\/+$/g, '');
+  }
+
+  // Strip tracking params
+  const trackingParams = new Set([
+    'utm_source','utm_medium','utm_campaign','utm_term','utm_content','utm_id',
+    'gclid','dclid','fbclid','igshid',
+    'mc_eid','mc_cid','_hsenc','_hsmi','mkt_tok','vero_conv','vero_id','yclid','si','spm'
+  ]);
+  for (const [k, v] of Array.from(u.searchParams.entries())) {
+    if (trackingParams.has(k) || v === '') u.searchParams.delete(k);
+  }
+
+  return u.toString();
+}
+// fetchDocument(url)
+async function fetchDocument(url) {
+  // Fetch a CORS-enabled page and return { html, finalUrl, contentType }.
+  // No proxy fallback.
+  const MAX_CHARS = 2_500_000; // ~2.5MB cap
+  const TIMEOUT_MS = 15_000;
+
+  const withTimeout = async (input, init) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      return await fetch(input, { ...init, signal: ctrl.signal, redirect: 'follow' });
+    } finally {
+      clearTimeout(t);
+    }
+  };
+
+  const toTextCapped = async (resp) => {
+    const raw = await resp.text();
+    return raw.length > MAX_CHARS ? raw.slice(0, MAX_CHARS) : raw;
+  };
+
+  // Direct fetch only
+  const resp = await withTimeout(url, { method: 'GET', credentials: 'omit' });
+
+  if (resp.type === 'opaque') throw new Error('CORS blocked.');
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  const contentType = resp.headers.get('content-type') || '';
+  const html = await toTextCapped(resp);
+  if (!html || !html.trim()) throw new Error('Empty body');
+
+  return {
+    html,
+    finalUrl: resp.url || url,
+    contentType
+  };
+}  
+
+// extractWithSelectors(doc)
+function extractWithSelectors(doc) {
+  // Heuristic scraper for pages without usable JSON-LD/Microdata.
+  // Returns a RawRecipe or null.
+  if (!doc) return null;
+
+  // --- helpers
+  const clean = (s) => (s || '').toString().replace(/\s+/g, ' ').trim();
+  const text = (el) => clean(el ? (el.getAttribute?.('content') || el.textContent || '') : '');
+  const meta = (sel) => doc.querySelector(sel);
+  const metaC = (...sels) => {
+    for (const s of sels) {
+      const m = meta(s);
+      if (m) { const v = m.getAttribute('content') || m.getAttribute('value') || ''; if (v) return clean(v); }
+    }
+    return '';
+  };
+  const pickFirst = (arr) => arr.find(Boolean) || '';
+  const byText = (root, sel, re) => Array.from(root.querySelectorAll(sel)).find(n => re.test(n.textContent || '')) || null;
+
+  // Try to find a content area to narrow searches
+  const main = doc.querySelector('main, article, .content, .post, .recipe, .entry, #content') || doc;
+
+  // --- Title
+  const title = pickFirst([
+    metaC('meta[property="og:title"]', 'meta[name="twitter:title"]'),
+    clean(main.querySelector('h1')?.textContent),
+    clean(doc.querySelector('h1')?.textContent),
+    clean(doc.title || '')
+  ]);
+
+  // --- Image
+  const image = pickFirst([
+    metaC('meta[property="og:image"]', 'meta[name="twitter:image"]'),
+    main.querySelector('img[src*="recipe"], img[class*="hero"], img[class*="featured"], figure img')?.getAttribute('src') || ''
+  ]);
+
+  // --- Ingredient & Instruction sections
+  const ING_RE = /ingredient|what you need|you will need/i;
+  const INST_RE = /instruction|direction|method|preparation|how to|steps|procedure/i;
+
+  const sectionList = (root, headerRe) => {
+    // Find a header, then the nearest list under same parent or following siblings
+    let header = byText(root, 'h1,h2,h3,h4,h5,strong,b,section header', headerRe);
+    if (!header) return [];
+    // Search sibling lists
+    const host = header.closest('section, article, .recipe, .entry, .content') || header.parentElement || root;
+    // Prefer lists close to header
+    const candidates = Array.from(host.querySelectorAll('ul,ol')).filter(ul => {
+      const rect = ul.compareDocumentPosition(header);
+      // Following or same container
+      return (rect & Node.DOCUMENT_POSITION_FOLLOWING) || ul.contains(header);
+    });
+    // Pick the first with at least 2 items
+    const list = candidates.find(ul => ul.querySelectorAll('li').length >= 2) || candidates[0];
+    if (list) return Array.from(list.querySelectorAll('li')).map(li => clean(li.textContent)).filter(Boolean);
+    // Fallback: paragraphs separated lines under header's parent
+    const paras = Array.from(host.querySelectorAll('p')).map(p => clean(p.textContent)).filter(Boolean);
+    return paras.length ? paras : [];
+  };
+
+  // Ingredients: try explicit section, otherwise guess by “ingredient-like” list
+  let ingredients = sectionList(main, ING_RE);
+  if (!ingredients.length) {
+    const guessUnits = /(tsp|tbsp|cup|cups|g|kg|ml|l|oz|pound|lb|teaspoon|tablespoon|grams?|milliliters?|liters?|ounces?)/i;
+    const lists = Array.from(main.querySelectorAll('ul,ol'));
+    const candidate = lists.find(ul => {
+      const items = Array.from(ul.querySelectorAll('li')).map(li => clean(li.textContent));
+      const hits = items.filter(s => /\d/.test(s) || guessUnits.test(s)).length;
+      return items.length >= 2 && hits >= Math.ceil(items.length * 0.4);
+    });
+    if (candidate) {
+      ingredients = Array.from(candidate.querySelectorAll('li')).map(li => clean(li.textContent)).filter(Boolean);
+    }
+  }
+
+  // Instructions: try explicit section, else find a numbered/ordered list, else paragraph split
+  let instructions = sectionList(main, INST_RE);
+  if (!instructions.length) {
+    const ol = main.querySelector('ol');
+    if (ol && ol.querySelectorAll('li').length >= 2) {
+      instructions = Array.from(ol.querySelectorAll('li')).map(li => clean(li.textContent)).filter(Boolean);
+    }
+  }
+  if (!instructions.length) {
+    // Paragraphs often contain step-like sentences
+    const paras = Array.from(main.querySelectorAll('p')).map(p => clean(p.textContent)).filter(Boolean);
+    if (paras.length >= 2) instructions = paras;
+  }
+
+  // --- Yield / Cuisine / Author / Keywords
+  const recipeYield = pickFirst([
+    metaC('meta[itemprop="recipeYield"]', 'meta[name="yield"]'),
+    clean(byText(main, '*', /yield|serves|servings/i)?.textContent || '')
+  ]);
+
+  const recipeCuisine = pickFirst([
+    metaC('meta[itemprop="recipeCuisine"]'),
+    clean(byText(main, '*', /cuisine/i)?.textContent || '')
+  ]);
+
+  const author = pickFirst([
+    metaC('meta[name="author"]', 'meta[property="article:author"]', 'meta[name="byl"]'),
+    clean(byText(doc, '*', /by\s+[\w\s]+/i)?.textContent || '')
+  ]);
+
+  const keywords = (metaC('meta[name="keywords"]') || '')
+    .split(/[,;|]/).map(s => clean(s)).filter(Boolean);
+
+  // --- Times
+  const timeToMin = (s) => {
+    s = clean(s.toLowerCase());
+    if (!s) return null;
+    // ISO already handled elsewhere, but support natural text:
+    // "1 hr 15 mins", "45 min", "2h", "1h30m"
+    let total = 0, ok = false;
+    const hr = s.match(/(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?/);
+    const mn = s.match(/(\d+(?:\.\d+)?)\s*m(?:in(?:ute)?s?)?/);
+    if (hr) { total += Math.round(parseFloat(hr[1]) * 60); ok = true; }
+    if (mn) { total += Math.round(parseFloat(mn[1])); ok = true; }
+    if (!ok) {
+      const compact = s.match(/(\d+)h(?:(\d+))?m?/);
+      if (compact) {
+        total += parseInt(compact[1], 10) * 60 + parseInt(compact[2] || '0', 10);
+        ok = true;
+      }
+    }
+    return ok ? total : null;
+  };
+
+  const timeNode = (re) =>
+    byText(main, 'time, .time, .cook-time, .prep-time, .total-time, li, p, span, div', re);
+
+  const totalTime = timeToMin(text(timeNode(/total\s*time/i))) ?? null;
+  const prepTime  = timeToMin(text(timeNode(/prep\s*time/i)))  ?? null;
+  const cookTime  = timeToMin(text(timeNode(/cook\s*time/i)))  ?? null;
+
+  // Minimal validity: need title + (ingredients or instructions)
+  const name = clean(title);
+  if (!name || (!ingredients.length && !instructions.length)) return null;
+
+  return {
+    name,
+    image: clean(image),
+    recipeIngredient: ingredients,
+    recipeInstructions: instructions,
+    recipeYield: clean(recipeYield),
+    recipeCuisine: clean(recipeCuisine),
+    author: clean(author),
+    keywords,
+    totalTime,
+    prepTime,
+    cookTime
+  };
+}
+// parseDurationToMinutes(isoOrText)
+function parseDurationToMinutes(isoOrText) {
+  // Parses ISO-8601 durations (e.g., PT30M, PT1H15M, P0DT45M) or free text ("1 hr 15 min", "1h30m", "90 minutes").
+  // Returns an integer number of minutes, or null if unparseable.
+
+  if (isoOrText == null) return null;
+  let s = String(isoOrText).trim();
+  if (!s) return null;
+
+  // --- Quick path: ISO-8601 Duration "PnDTnHnMnS"
+  if (/^P/i.test(s)) {
+    const m = s.match(/P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?/i);
+    if (m) {
+      const days = parseInt(m[1] || '0', 10);
+      const hours = parseInt(m[2] || '0', 10);
+      const mins = parseInt(m[3] || '0', 10);
+      const secs = parseInt(m[4] || '0', 10);
+      return days * 1440 + hours * 60 + mins + (secs ? Math.round(secs / 60) : 0);
+    }
+    return null;
+  }
+
+  // --- Normalize for free text
+  // unify dashes, lowercase, strip filler words
+  s = s
+    .replace(/[–—−]/g, '-')       // dashes
+    .replace(/\babout|approx\.?|approximately|\broughly|~|≈/gi, '')
+    .toLowerCase()
+    .trim();
+
+  // unicode fraction map
+  const fracMap = {
+    '½': '1/2','¼': '1/4','¾': '3/4',
+    '⅓': '1/3','⅔': '2/3',
+    '⅕': '1/5','⅖': '2/5','⅗': '3/5','⅘': '4/5',
+    '⅙': '1/6','⅚': '5/6',
+    '⅛': '1/8','⅜': '3/8','⅝': '5/8','⅞': '7/8'
+  };
+  s = s.replace(/[½¼¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]/g, (m) => fracMap[m] || m);
+
+  // Helper: parse "1 1/2", "1-1/2", "1/2", "1.5" -> number
+  const toNumber = (txt) => {
+    let t = (txt || '').trim();
+    t = t.replace(/(\d+)-(\d+\/\d+)/, '$1 $2'); // 1-1/2 -> 1 1/2
+    const mixed = t.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (mixed) return parseFloat(mixed[1]) + (parseFloat(mixed[2]) / (parseFloat(mixed[3]) || 1));
+    const frac = t.match(/^(\d+)\/(\d+)$/);
+    if (frac) return parseFloat(frac[1]) / (parseFloat(frac[2]) || 1);
+    const f = parseFloat(t);
+    return Number.isFinite(f) ? f : NaN;
+  };
+
+  // Compact forms like "1h30", "1h30m", "90m"
+  const compactHM = s.match(/^(\d+(?:[.,]\d+)?)[ ]*h(?:ours?|rs?)?[ ]*(\d+)?[ ]*m?(?:in(?:ute)?s?)?$/i);
+  if (compactHM) {
+    const h = parseFloat(compactHM[1].replace(',', '.')) || 0;
+    const m = parseInt(compactHM[2] || '0', 10);
+    return Math.round(h * 60) + m;
+    }
+  const onlyMin = s.match(/^(\d+(?:[.,]\d+)?)[ ]*m(?:in(?:ute)?s?)?$/i);
+  if (onlyMin) {
+    return Math.round(parseFloat(onlyMin[1].replace(',', '.')));
+  }
+  const onlyHour = s.match(/^(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?)\s*h(?:ours?|rs?)?$/i);
+  if (onlyHour) {
+    const h = toNumber(onlyHour[1]);
+    if (Number.isFinite(h)) return Math.round(h * 60);
+  }
+
+  // General extraction: capture hour and minute fragments anywhere
+  // hours can be "1.5 h", "1 1/2 hours", "1-1/2 hrs"
+  const hrMatch = s.match(/(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?|\d+-\d+\/\d+)\s*h(?:ours?|rs?)?/i);
+  const mnMatch = s.match(/(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?|\d+-\d+\/\d+)\s*m(?:in(?:ute)?s?)?/i);
+
+  let total = 0;
+  let found = false;
+
+  if (hrMatch) {
+    const h = toNumber(hrMatch[1].replace(',', '.'));
+    if (Number.isFinite(h)) { total += Math.round(h * 60); found = true; }
+  }
+  if (mnMatch) {
+    const m = toNumber(mnMatch[1].replace(',', '.'));
+    if (Number.isFinite(m)) { total += Math.round(m); found = true; }
+  }
+
+  // If we didn't find labeled units, but it's just a number, assume minutes
+  if (!found) {
+    const num = s.match(/^\s*(\d+(?:[.,]\d+)?)\s*$/);
+    if (num) return Math.round(parseFloat(num[1].replace(',', '.')));
+  }
+
+  return found ? total : null;
+}
+// pickBestImage(urls, baseUrl)
+function pickBestImage(urls, baseUrl) {
+  // Choose the most likely high-quality recipe image.
+  // Heuristics:
+  // - Resolve relative URLs against baseUrl
+  // - Prefer jpg/jpeg/png/webp
+  // - Prefer filenames with hero/featured/main/og/cover/recipe
+  // - Penalize thumb/small/icon/logo/sprite/placeholder
+  // - Prefer larger sizes inferred from "<w>x<h>" or ?w= / ?width= / ?h=
+  // - Drop tiny images (<200px inferred)
+  // Returns absolute URL or null.
+
+  if (!Array.isArray(urls) || !urls.length) return null;
+  const seen = new Set();
+
+  const resolveAbs = (u) => {
+    try {
+      const abs = new URL(u, baseUrl || window.location.href);
+      if (!/^https?:$/.test(abs.protocol)) return null;
+      return abs.toString();
+    } catch { return null; }
+  };
+
+  const norm = (u) => u.split('#')[0]; // ignore fragments
+
+  const extScore = (u) => {
+    const m = u.match(/\.(webp|jpe?g|png|gif|svg)(?:[\?#]|$)/i);
+    if (!m) return 0;
+    const ext = m[1].toLowerCase();
+    if (ext === 'webp' || ext === 'jpg' || ext === 'jpeg' || ext === 'png') return 6;
+    if (ext === 'gif') return -2;   // avoid animated or low-quality
+    if (ext === 'svg') return -3;   // logos/icons
+    return 0;
+  };
+
+  const keywordScore = (u) => {
+    const s = u.toLowerCase();
+    let sc = 0;
+    if (/(^|\/)(og|open-graph|opengraph)[-_]?image/.test(s)) sc += 5;
+    if (/hero|featured|feature|cover|banner|main|header/.test(s)) sc += 4;
+    if (/recipe|dish|food|plate|step/.test(s)) sc += 2;
+
+    if (/thumb|thumbnail|tiny|small|mini|min-|_sm\.|_xs\.|\b200x200\b/.test(s)) sc -= 6;
+    if (/icon|logo|sprite|placeholder|default|avatar|generic/.test(s)) sc -= 8;
+    if (/ads|tracking|pixel/.test(s)) sc -= 10;
+    if (/\/wp-content\/uploads\//.test(s)) sc += 1; // real content hint
+    return sc;
+  };
+
+  // Extract numeric dimension hints from filename or querystring
+  const sizeHints = (u) => {
+    let w = 0, h = 0;
+
+    // filename like ".../image-1200x800.jpg" OR ".../1200x800/image.jpg"
+    const m1 = u.match(/(?:^|[^\d])(\d{2,4})[xX](\d{2,4})(?!\d)/);
+    if (m1) { w = parseInt(m1[1], 10); h = parseInt(m1[2], 10); }
+
+    // query params ?w=1200&h=800 or ?width= or ?height=
+    try {
+      const q = new URL(u).searchParams;
+      const qw = parseInt(q.get('w') || q.get('width') || q.get('maxwidth') || q.get('mw') || '0', 10);
+      const qh = parseInt(q.get('h') || q.get('height') || q.get('maxheight') || q.get('mh') || '0', 10);
+      if (qw && (!w || qw > w)) w = qw;
+      if (qh && (!h || qh > h)) h = qh;
+    } catch { /* ignore */ }
+
+    return { w, h };
+  };
+
+  const dimScore = (u) => {
+    const { w, h } = sizeHints(u);
+    if (!w && !h) return 0;
+    const a = (w || h) * (h || w); // if one missing, treat square
+    // Penalize very small
+    if (w && w < 200) return -6;
+    if (h && h < 200) return -6;
+    // Reward bigger areas (log scale)
+    return Math.log10(Math.max(1, a)) * 2; // ~6–8 pts for 1200x800
+  };
+
+  const score = (u) => extScore(u) + keywordScore(u) + dimScore(u);
+
+  const candidates = [];
+  for (const raw of urls) {
+    if (!raw || typeof raw !== 'string') continue;
+    // skip data/blob URLs
+    if (/^(data|blob):/i.test(raw)) continue;
+    const abs = resolveAbs(raw);
+    if (!abs) continue;
+    const key = norm(abs);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({ url: key, s: score(key) });
+  }
+
+  if (!candidates.length) return null;
+
+  // Sort by score desc, then by URL length desc (longer often has size hints)
+  candidates.sort((a, b) => (b.s - a.s) || (b.url.length - a.url.length));
+
+  // Final sanity: if top looks like a logo/icon despite score, try next
+  for (const c of candidates) {
+    if (/(logo|icon|sprite|placeholder)/i.test(c.url)) continue;
+    return c.url;
+  }
+  return candidates[0].url;
+}
+// importFromUrl(url)
+async function importFromUrl(url) {
+  if (!url || !url.trim()) throw new Error('URL is required');
+
+  // Timeout wrapper: fail if the whole import takes longer than 60s
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Import timeout (60s)')), 60_000)
+  );
+
+  const importTask = (async () => {
+    const _resolveUrl = (typeof resolveUrl === 'function') ? resolveUrl : (u) => u;
+    const _fetchDocument = (typeof fetchDocument === 'function') ? fetchDocument : null;
+    const _normalize = (typeof normalizeRecipe === 'function') ? normalizeRecipe : null;
+
+    if (!_fetchDocument) throw new Error('fetchDocument(url) is not implemented');
+    if (!_normalize) throw new Error('normalizeRecipe(raw, sourceUrl) is not implemented');
+
+    const finalUrl = _resolveUrl(url);
+    const { html, finalUrl: fetchedUrl /* contentType unused here */, contentType } = await _fetchDocument(finalUrl);
+
+    // Build a DOM Document
+    const _htmlToDocument = (typeof htmlToDocument === 'function')
+      ? htmlToDocument
+      : (htmlText, baseHref) => {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(htmlText, 'text/html');
+          if (baseHref && !doc.querySelector('base')) {
+            const base = doc.createElement('base');
+            base.setAttribute('href', baseHref);
+            doc.head && doc.head.insertBefore(base, doc.head.firstChild || null);
+          }
+          return doc;
+        };
+
+    const doc = _htmlToDocument(html, fetchedUrl);
+
+    // Extract raw recipe
+    const _extractRawRecipe = (typeof extractRawRecipe === 'function')
+      ? extractRawRecipe
+      : (d) => {
+          if (typeof extractFromJsonLd === 'function') {
+            const r = extractFromJsonLd(d);
+            if (r) return r;
+          }
+          if (typeof extractFromMicrodata === 'function') {
+            const r = extractFromMicrodata(d);
+            if (r) return r;
+          }
+          if (typeof extractWithSelectors === 'function') {
+            const r = extractWithSelectors(d);
+            if (r) return r;
+          }
+          return null;
+        };
+
+    let raw = _extractRawRecipe(doc);
+    if (!raw) throw new Error('Unable to parse recipe from the provided URL');
+
+    // If image missing, collect candidates and pick the best
+    if (!raw.image || !String(raw.image).trim()) {
+      const gatherImages = (d) => {
+        const out = new Set();
+        const push = (u) => { if (u && typeof u === 'string') out.add(u.trim()); };
+        d.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(m => push(m.getAttribute('content')));
+        d.querySelectorAll('link[rel="image_src"]').forEach(l => push(l.getAttribute('href')));
+        const host = d.querySelector('main, article, .content, .post, .entry, .recipe, #content') || d;
+        host.querySelectorAll('img[src]').forEach(img => push(img.getAttribute('src')));
+        return Array.from(out);
+      };
+
+      const candidates = (typeof collectCandidateImages === 'function')
+        ? collectCandidateImages(doc, fetchedUrl)
+        : gatherImages(doc);
+
+      if (Array.isArray(candidates) && candidates.length) {
+        if (typeof pickBestImage === 'function') {
+          const best = pickBestImage(candidates, fetchedUrl);
+          if (best) raw.image = best;
+        } else {
+          raw.image = candidates[0];
+        }
+      }
+    }
+
+    // Normalize to your schema
+    const draft = _normalize(raw, fetchedUrl);
+    draft.source_url = fetchedUrl;
+
+    // Ensure basic defaults
+    if (!draft.name) draft.name = (doc.title || '').trim() || 'Imported Recipe';
+    if (!Number.isFinite(draft.prep_time)) draft.prep_time = 0;
+    if (!Array.isArray(draft.ingredients)) draft.ingredients = [];
+    if (typeof draft.instructions !== 'string') draft.instructions = '';
+
+    return draft;
+  })();
+
+  return Promise.race([importTask, timeout]);
+}
+// htmlToDocument(html, baseUrl)
+function htmlToDocument(html, baseUrl) {
+  // Build a DOM Document from HTML and ensure relative URLs resolve via <base>.
+  if (typeof html !== 'string' || !html.trim()) {
+    throw new Error('htmlToDocument: HTML string is required');
+  }
+
+  // Normalize baseUrl if available
+  let href = '';
+  if (baseUrl) {
+    try {
+      const norm = (typeof resolveUrl === 'function') ? resolveUrl(baseUrl) : baseUrl;
+      href = new URL(norm, window.location.href).toString();
+    } catch {
+      // ignore invalid baseUrl; keep href empty
+    }
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // Ensure a <head> exists
+  if (!doc.head) {
+    const head = doc.createElement('head');
+    if (doc.documentElement.firstChild) {
+      doc.documentElement.insertBefore(head, doc.documentElement.firstChild);
+    } else {
+      doc.documentElement.appendChild(head);
+    }
+  }
+
+  // If no <base>, add one to make relative URLs resolvable
+  if (href && !doc.querySelector('base')) {
+    const base = doc.createElement('base');
+    base.setAttribute('href', href);
+    doc.head.insertBefore(base, doc.head.firstChild || null);
+  }
+
+  return doc;
+}
+// extractRawRecipe(doc)
+function extractRawRecipe(doc) {
+  if (!doc) return null;
+
+  // 1) JSON-LD
+  if (typeof extractFromJsonLd === 'function') {
+    try {
+      const r1 = extractFromJsonLd(doc);
+      if (r1) return r1;
+    } catch (e) { /* silent */ }
+  }
+
+  // 2) Microdata
+  if (typeof extractFromMicrodata === 'function') {
+    try {
+      const r2 = extractFromMicrodata(doc);
+      if (r2) return r2;
+    } catch (e) { /* silent */ }
+  }
+
+  // 3) Heuristic selectors
+  if (typeof extractWithSelectors === 'function') {
+    try {
+      const r3 = extractWithSelectors(doc);
+      if (r3) return r3;
+    } catch (e) { /* silent */ }
+  }
+
+  return null;
+}
+// mapUnits(unit)
+function mapUnits(unit) {
+  // Canonicalize units to: tsp, tbsp, cup, g, kg, ml, L, oz, lb, units
+  if (!unit) return '';
+
+  // normalize
+  let u = String(unit)
+    .trim()
+    .replace(/[().,]/g, '')           // drop punctuation
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+  // handle common two-word forms first
+  if (/^fl(?:uid)?\s*oz(?:\.|es)?$/.test(u)) return 'oz';
+
+  // UK/US spelling unification
+  u = u.replace(/millilitre(s)?/g, 'milliliter$1')
+       .replace(/litre(s)?/g, 'liter$1');
+
+  // direct map
+  const map = new Map([
+    // teaspoons
+    ['t', 'tsp'], ['tsp', 'tsp'], ['tsp.', 'tsp'], ['tsps', 'tsp'],
+    ['teaspoon', 'tsp'], ['teaspoons', 'tsp'],
+
+    // tablespoons
+    ['tbsp', 'tbsp'], ['tbsp.', 'tbsp'], ['tbs', 'tbsp'], ['tbs.', 'tbsp'],
+    ['tbl', 'tbsp'], ['tbl.', 'tbsp'], ['tbsps', 'tbsp'],
+    ['tablespoon', 'tbsp'], ['tablespoons', 'tbsp'],
+
+    // cups
+    ['cup', 'cup'], ['cups', 'cup'],
+
+    // metric mass
+    ['g', 'g'], ['gram', 'g'], ['grams', 'g'], ['gr', 'g'], ['gms', 'g'],
+    ['kg', 'kg'], ['kilogram', 'kg'], ['kilograms', 'kg'], ['kgs', 'kg'],
+
+    // metric volume
+    ['ml', 'ml'], ['milliliter', 'ml'], ['milliliters', 'ml'],
+    ['l', 'L'], ['lt', 'L'], ['liter', 'L'], ['liters', 'L'],
+
+    // imperial
+    ['oz', 'oz'], ['ounce', 'oz'], ['ounces', 'oz'],
+    ['lb', 'lb'], ['lbs', 'lb'], ['pound', 'lb'], ['pounds', 'lb'],
+
+    // countables → units
+    ['clove', 'units'], ['cloves', 'units'],
+    ['can', 'units'], ['cans', 'units'],
+    ['slice', 'units'], ['slices', 'units'],
+    ['stick', 'units'], ['sticks', 'units'],
+    ['piece', 'units'], ['pieces', 'units'],
+    ['pc', 'units'], ['pcs', 'units'],
+
+    // pinches/dashes → units (canonical target set)
+    ['pinch', 'units'], ['pinches', 'units'],
+    ['dash', 'units'], ['dashes', 'units']
+  ]);
+
+  // exact match
+  if (map.has(u)) return map.get(u);
+
+  // common dotted/plural forms
+  const noDot = u.replace(/\.$/, '');
+  if (map.has(noDot)) return map.get(noDot);
+
+  const noPlural = u.endsWith('s') ? u.slice(0, -1) : u;
+  if (map.has(noPlural)) return map.get(noPlural);
+
+  // ambiguous single-letter "c" is often "cup" but can be Celsius; do NOT auto-map.
+
+  return u; // fall back to original normalized token
+}
+// validateRecipe(draft)
+function validateRecipe(draft) {
+  const errs = [];
+  const isStr = (v) => typeof v === 'string';
+  const nonEmpty = (v) => isStr(v) && v.trim().length > 0;
+  const isFiniteNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  if (!draft || typeof draft !== 'object') {
+    return ['Invalid draft payload.'];
+  }
+
+  // name
+  if (!nonEmpty(draft.name)) errs.push('Name is required.');
+
+  // category (optional but if present must be string)
+  if (draft.category != null && !isStr(draft.category)) errs.push('Category must be a string.');
+
+  // servings
+  const servings = Number(draft.servings);
+  if (!Number.isFinite(servings) || servings <= 0) errs.push('Servings must be a positive number.');
+  if (Number.isFinite(servings) && servings > 1000) errs.push('Servings is unrealistically large.');
+
+  // prep_time (minutes)
+  const prep = Number(draft.prep_time);
+  if (!Number.isFinite(prep) || prep < 0) errs.push('Prep time must be 0 or a positive number.');
+  if (Number.isFinite(prep) && prep > 24 * 60) errs.push('Prep time exceeds 24 hours.');
+
+  // instructions
+  if (!nonEmpty(draft.instructions)) errs.push('Instructions are required.');
+
+  // ingredients
+  if (!Array.isArray(draft.ingredients) || draft.ingredients.length === 0) {
+    errs.push('At least one ingredient is required.');
+  } else {
+    // Validate each ingredient
+    draft.ingredients.forEach((ing, idx) => {
+      if (!ing || typeof ing !== 'object') {
+        errs.push(`Ingredient #${idx + 1} is malformed.`);
+        return;
+      }
+      const itemOk = nonEmpty(ing.item);
+      const amountOk = (ing.amount == null) || isFiniteNum(Number(ing.amount));
+      if (!itemOk && !amountOk && !nonEmpty(ing.unit || '')) {
+        errs.push(`Ingredient #${idx + 1} is empty.`);
+      }
+      if (!itemOk) errs.push(`Ingredient #${idx + 1} requires an item name.`);
+      if (!amountOk) errs.push(`Ingredient #${idx + 1} amount must be a number.`);
+      if (isFiniteNum(Number(ing.amount)) && Number(ing.amount) < 0) {
+        errs.push(`Ingredient #${idx + 1} amount cannot be negative.`);
+      }
+      if (isFiniteNum(Number(ing.amount)) && Number(ing.amount) > 100000) {
+        errs.push(`Ingredient #${idx + 1} amount is unrealistically large.`);
+      }
+
+      // Optional: canonicalize unit if mapper exists
+      if (ing.unit && typeof mapUnits === 'function') {
+        ing.unit = mapUnits(ing.unit);
+      }
+    });
+  }
+
+  // image_url (optional, but if present must be a valid http(s) URL)
+  if (draft.image_url) {
+    try {
+      const u = new URL(String(draft.image_url));
+      if (!/^https?:$/.test(u.protocol)) errs.push('Image URL must use http(s).');
+    } catch {
+      errs.push('Image URL is invalid.');
+    }
+  }
+
+  // submitted_by (optional string)
+  if (draft.submitted_by != null && !isStr(draft.submitted_by)) {
+    errs.push('submitted_by must be a string.');
+  }
+
+  // Trim common strings in-place (safe side effect)
+  try {
+    draft.name = (draft.name || '').toString().trim();
+    draft.category = (draft.category || '').toString().trim();
+    draft.instructions = (draft.instructions || '').toString().trim();
+    if (Array.isArray(draft.ingredients)) {
+      draft.ingredients = draft.ingredients.map(i => ({
+        item: (i.item || '').toString().trim(),
+        amount: Number.isFinite(Number(i.amount)) ? Number(i.amount) : i.amount,
+        unit: (i.unit || '').toString().trim()
+      }));
+    }
+  } catch { /* ignore sanitize errors */ }
+
+  return errs;
+}
+// collectCandidateImages(doc, baseUrl)
+function collectCandidateImages(doc, baseUrl) {
+  // Collects potential recipe images from:
+  // - <meta property="og:image">, <meta name="twitter:image">
+  // - <link rel="image_src">
+  // - <img src|srcset|data-src|data-original>
+  // Returns an array of raw URLs (may be relative). pickBestImage() will resolve/score them.
+
+  if (!doc) return [];
+
+  const out = new Set();
+
+  const push = (v) => {
+    if (!v || typeof v !== 'string') return;
+    const s = v.trim();
+    if (!s) return;
+    // Skip data/blob
+    if (/^(data|blob):/i.test(s)) return;
+    out.add(s);
+  };
+
+  // 1) OpenGraph/Twitter
+  doc.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]').forEach(m => {
+    push(m.getAttribute('content'));
+  });
+
+  // 2) legacy link
+  doc.querySelectorAll('link[rel="image_src"]').forEach(l => push(l.getAttribute('href')));
+
+  // 3) images in main/article first, then whole doc
+  const scope = doc.querySelector('main, article, .content, .post, .entry, .recipe, #content') || doc;
+
+  const harvestImg = (img) => {
+    // src
+    push(img.getAttribute('src'));
+    // data-* lazy attributes
+    push(img.getAttribute('data-src'));
+    push(img.getAttribute('data-original'));
+    push(img.getAttribute('data-lazy'));
+    push(img.getAttribute('data-image'));
+    // srcset: split and keep URLs
+    const srcset = img.getAttribute('srcset');
+    if (srcset) {
+      srcset.split(',').forEach(part => {
+        const u = part.trim().split(/\s+/)[0];
+        push(u);
+      });
+    }
+    // picture > source[srcset]
+    const parent = img.parentElement;
+    if (parent && parent.tagName.toLowerCase() === 'picture') {
+      parent.querySelectorAll('source[srcset]').forEach(src => {
+        const set = src.getAttribute('srcset');
+        if (set) {
+          set.split(',').forEach(part => {
+            const u = part.trim().split(/\s+/)[0];
+            push(u);
+          });
+        }
+      });
+    }
+  };
+
+  scope.querySelectorAll('img').forEach(harvestImg);
+
+  // 4) Consider canonical/cover hints
+  doc.querySelectorAll('link[rel="preload"][as="image"], link[rel="thumbnail"], link[rel="icon"]').forEach(l => {
+    push(l.getAttribute('href'));
+  });
+
+  // Return unique list
+  return Array.from(out);
+}
+// guessCategoryFromTags(tags)
+function guessCategoryFromTags(tags) {
+  // Prefill a single category from free-form tags/keywords.
+  // Priority: Vegan/Vegetarian > specific proteins > general buckets.
+  // Unknown → "Miscellaneous".
+  if (!tags) return 'Miscellaneous';
+
+  // Normalize to a bag of lowercase tokens
+  const bag = new Set(
+    (Array.isArray(tags) ? tags : [tags])
+      .flatMap(t => String(t || '')
+        .toLowerCase()
+        .split(/[,\|/;]\s*|[\s]+/))
+      .map(s => s.trim())
+      .filter(Boolean)
+  );
+
+  const has = (...kw) => kw.some(k => bag.has(k));
+
+  // 1) Diet-first
+  if (has('vegan')) return 'Vegetarian';
+  if (has('vegetarian', 'meatless')) return 'Vegetarian';
+
+  // 2) Specific proteins
+  if (has('beef', 'steak', 'ground-beef', 'mince', 'burger')) return 'Beef';
+  if (has('chicken', 'poultry', 'drumstick', 'thigh', 'breast')) return 'Chicken';
+  if (has('pork', 'bacon', 'ham')) return 'Pork';
+  if (has('lamb', 'mutton')) return 'Lamb';
+  if (has('turkey')) return 'Chicken'; // closest existing bucket
+  if (has('fish', 'salmon', 'tuna', 'cod', 'tilapia')) return 'Seafood';
+  if (has('seafood', 'shrimp', 'prawn', 'crab', 'squid', 'octopus', 'mussels')) return 'Seafood';
+  if (has('egg', 'eggs', 'omelette', 'omelet')) return 'Vegetarian'; // many apps treat egg as veg-friendly
+
+  // 3) General dish types
+  if (has('dessert', 'sweet', 'cake', 'cookie', 'brownie', 'pie')) return 'Dessert';
+  if (has('breakfast', 'brunch', 'pancake', 'waffle')) return 'Breakfast';
+  if (has('soup', 'stew', 'broth', 'chowder')) return 'Soup';
+  if (has('salad')) return 'Salad';
+  if (has('pasta', 'noodle', 'noodles', 'spaghetti', 'lasagna')) return 'Pasta';
+  if (has('bread', 'baking', 'loaf', 'bun', 'roll')) return 'Bread';
+  if (has('drink', 'beverage', 'smoothie', 'juice', 'cocktail', 'mocktail')) return 'Beverage';
+  if (has('sauce', 'condiment', 'dressing')) return 'Sauce';
+  if (has('appetizer', 'starter', 'snack', 'tapas')) return 'Appetizer';
+  if (has('rice', 'risotto', 'fried-rice', 'pilaf', 'paella')) return 'Rice';
+
+  // 4) Cuisines that imply common defaults (optional)
+  if (has('italian')) return 'Pasta';
+  if (has('japanese', 'sushi', 'ramen')) return 'Seafood';
+  if (has('filipino', 'adobo', 'sinigang')) return 'Pork';
+  if (has('indian', 'curry')) return has('vegetarian') ? 'Vegetarian' : 'Chicken';
+  if (has('mexican', 'taco', 'enchilada')) return 'Beef';
+
+  // 5) Fallbacks
+  if (has('vegetable', 'veggies', 'veggie')) return 'Vegetarian';
+
+  return 'Miscellaneous';
+}
+// stripHtmlToText(html)
+function stripHtmlToText(html) {
+  // Converts arbitrary HTML (instructions/steps) to clean plaintext with newlines.
+  if (html == null) return '';
+  const s = String(html);
+
+  // Fast path: empty or no tags
+  if (!/[<>&]/.test(s)) {
+    return s.replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ').trim();
+  }
+
+  // Try DOMParser when available for safer handling
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(s, 'text/html');
+
+    // Remove scripts/styles/noscript
+    doc.querySelectorAll('script, style, noscript').forEach(n => n.remove());
+
+    // Convert structural tags to newlines
+    const nlTags = ['br', 'p', 'div', 'li', 'tr', 'section', 'article', 'header', 'footer'];
+    nlTags.forEach(tag => {
+      doc.querySelectorAll(tag).forEach(el => {
+        // Insert newline marker after each element
+        el.insertAdjacentText('afterend', '\n');
+      });
+    });
+
+    // Special: lists and headings get extra spacing
+    doc.querySelectorAll('ul, ol, h1, h2, h3, h4, h5, h6').forEach(el => {
+      el.insertAdjacentText('afterend', '\n');
+    });
+
+    // Get textContent and normalize
+    let out = doc.body ? doc.body.textContent || '' : doc.textContent || '';
+
+    // Decode & normalize whitespace
+    out = out
+      .replace(/\r\n?/g, '\n')
+      .replace(/\u00A0/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')      // trim end spaces
+      .replace(/\n{3,}/g, '\n\n')      // collapse multiple blank lines
+      .trim();
+
+    return out;
+  } catch {
+    // Fallback: regex-based stripping
+    return s
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p\s*>/gi, '\n')
+      .replace(/<\/div\s*>/gi, '\n')
+      .replace(/<\/li\s*>/gi, '\n')
+      .replace(/<\/tr\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+}
+// coalesceTime(total, prep, cook)
+function coalesceTime(total, prep, cook) {
+  // Decide final minutes using precedence: total > (prep + cook) > prep > cook.
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  const clamp = (n) => {
+    // Floor negatives to 0; hard-cap to 24h for sanity (adjust if needed).
+    if (!isNum(n)) return 0;
+    if (n < 0) return 0;
+    if (n > 24 * 60) return 24 * 60;
+    return Math.round(n);
+  };
+
+  if (isNum(total) && total > 0) return clamp(total);
+
+  const sum = (isNum(prep) ? prep : 0) + (isNum(cook) ? cook : 0);
+  if (sum > 0) return clamp(sum);
+
+  if (isNum(prep) && prep >= 0) return clamp(prep);
+  if (isNum(cook) && cook >= 0) return clamp(cook);
+
+  return 0;
+}
+// Placement: put this function BEFORE saveRecipe() in your Nutriplan.html
+
+
+        async function loadUserFromSupabase(username) {
+            try {
+                const allUsers = await supaFetch('users', { method: 'GET', query: 'select=*' });
+                const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+                if (user) console.log('✅ User loaded:', user.username, 'Admin:', user.is_admin);
+                return user || null;
+            } catch (e) {
+                console.error('❌ Failed to load user:', e);
+                return null;
+            }
+        }
+
+        function getCurrentUser() {
+            return currentUser;
+        }
+
+        async function setCurrentUser(username) {
+            if (username) {
+                currentUser = await loadUserFromSupabase(username);
+                if (currentUser) {
+                    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ username: currentUser.username }));
+                }
+            } else {
+                currentUser = null;
+                localStorage.removeItem(CURRENT_USER_KEY);
+            }
+            refreshHeaderUser();
+            await refreshRecipesFromSupabase();
+        }
+
+        async function initUser() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(CURRENT_USER_KEY));
+                if (stored && stored.username) await setCurrentUser(stored.username);
+            } catch (e) {
+                console.error('Failed to init user:', e);
+            }
+        }
+
         // ===================== Theme =====================
         function toggleTheme() {
             const body = document.body;
             const currentTheme = body.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             body.setAttribute('data-theme', newTheme);
-            const themeBtn = document.querySelector('.theme-toggle');
-            themeBtn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+            document.querySelector('.theme-toggle').textContent = newTheme === 'dark' ? '☀️' : '🌙';
             localStorage.setItem('theme', newTheme);
         }
+
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.body.setAttribute('data-theme', savedTheme);
-        const themeBtnInit = document.querySelector('.theme-toggle');
-        if (themeBtnInit) themeBtnInit.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        document.querySelector('.theme-toggle').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
 
         // ===================== Tabs =====================
-		function switchTab(el, tabName) {
-			const tabs = document.querySelectorAll('.tab');
-			const contents = document.querySelectorAll('.tab-content');
-			tabs.forEach(tab => tab.classList.remove('active'));
-			contents.forEach(content => content.classList.remove('active'));
-			if (el) el.classList.add('active');
-			document.getElementById(tabName).classList.add('active');
-			
-			// Special handling for different tabs
-			if (tabName === 'shopping') {
-				updateShoppingList();
-			} else if (tabName === 'approval') {
-				renderApprovalGrid();
-			}
-		}
+        function switchTab(el, tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            if (el) el.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            if (tabName === 'shopping') updateShoppingList();
+            else if (tabName === 'approval') renderApprovalGrid();
+        }
 
-        // ===================== Recipes / Pantry / Planner (in-memory for UI) =====================
-        let recipes = []; // will be hydrated from Supabase
+        // ===================== Recipe Data =====================
+        let recipes = [];
         let pantry = [
             { item: "spaghetti", amount: 200, unit: "g" },
             { item: "eggs", amount: 6, unit: "units" },
@@ -707,7 +2205,6 @@
         let mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
         let editingRecipeId = null;
 
-        // Map Supabase row -> UI recipe
         function rowToRecipe(r) {
             return {
                 id: r.id,
@@ -720,296 +2217,389 @@
                 ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
                 instructions: r.instructions || '',
                 submittedBy: r.submitted_by || 'Unknown',
-                approved: !!r.approved
+                approved: !!r.approved,
+                averageRating: r.average_rating || 0,
+                ratingCount: r.rating_count || 0
             };
         }
 
+        // ===================== RATING SYSTEM (NEW!) =====================
         
-// ---------- Modal helpers ----------
-		function openRecipeModal(recipeId) {
-		  const r = recipes.find(x => String(x.id) === String(recipeId));
-		  if (!r) return;
-
-		  console.log('📖 Opening recipe modal:', r.name, 'Approved:', r.approved);
-
-		  const img = r.image ? `<img src="${r.image}" alt="${r.name}" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:10px;">` : '';
-		  const ing = (r.ingredients || []).map(i => `<li>${i.amount} ${i.unit} ${i.item}</li>`).join('');
-		  const instr = (r.instructions || '').replace(/\n/g, '<br>');
-
-		  // Check if current user is admin
-		  const cu = getCurrentUser();
-		  const user = cu ? findUser(cu.username) : null;
-		  const isAdmin = user?.isAdmin || false;
-		  
-		  console.log('👤 Current user:', cu?.username, 'Is Admin:', isAdmin, 'Recipe approved:', r.approved);
-
-		  document.getElementById('rdmTitle').textContent = r.name;
-		  document.getElementById('rdmBody').innerHTML = `
-			${img}
-			<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-			  <span class="recipe-category">${r.category}${r.approved ? '' : ' • Pending'}</span>
-			  <span>👥 ${r.servings} servings</span>
-			  <span>⏱️ ${r.prepTime} mins</span>
-			  <span>🧑‍🍳 ${r.submittedBy || 'Unknown'}</span>
-			</div>
-			<h3 style="margin:8px 0 6px;">Ingredients</h3>
-			<ul class="ingredients-list" style="max-height:220px;overflow:auto;">${ing || '<li>No ingredients recorded.</li>'}</ul>
-			<h3 style="margin:10px 0 6px;">Instructions</h3>
-			<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:260px;overflow:auto;">${instr || 'No instructions provided.'}</div>
-			<div style="display:flex;gap:8px;margin-top:12px;">
-			  <button class="btn btn-small" onclick="addToMealPlan('${r.id}')">Add to Meal Plan</button>
-			  ${(!r.approved && isAdmin)
-				? `<button class="btn btn-secondary btn-small" onclick="approveRecipe('${r.id}')">✅ Approve</button>`
-				: ''
-			  }
-			  <button class="btn btn-secondary btn-small" onclick="printRecipe('${r.id}')">Print</button>
-			  <button class="btn btn-danger btn-small" onclick="deleteRecipe('${r.id}')">Delete</button>
-			</div>
-		  `;
-		  document.getElementById('recipeDetailsModal').classList.add('active');
-		}
-
-		function closeRecipeModal() {
-		  document.getElementById('recipeDetailsModal').classList.remove('active');
-		  document.getElementById('rdmTitle').textContent = '';
-		  document.getElementById('rdmBody').innerHTML = '';
-		}
-
-		// ---------- Grid rendering (string IDs + modal triggers) ----------
-		function renderRecipes() {
-		  const grid = document.getElementById('recipeGrid');
-		  const favoritesOnly = document.getElementById('favoritesOnly').checked;
-		  const categoryFilter = document.getElementById('categoryFilter').value;
-
-		  // Check if current user is admin
-		  const cu = getCurrentUser();
-		  const user = cu ? findUser(cu.username) : null;
-		  const isAdmin = user?.isAdmin || false;
-		  
-		  console.log('🎨 Rendering recipes. Admin:', isAdmin, 'Total recipes:', recipes.length);
-
-		  let filteredRecipes = recipes;
-		  if (favoritesOnly) filteredRecipes = filteredRecipes.filter(r => r.isFavorite);
-		  if (categoryFilter) filteredRecipes = filteredRecipes.filter(r => r.category === categoryFilter);
-
-		  grid.innerHTML = filteredRecipes.map(recipe => `
-			<div class="recipe-card">
-			  ${recipe.image
-				? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
-				: `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
-			  }
-			  <div class="recipe-content">
-				<div class="recipe-header">
-				  <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
-				  <div class="recipe-actions">
-					<button class="icon-btn ${recipe.isFavorite ? 'active' : ''}" onclick="toggleFavorite('${recipe.id}')" title="Favorite">
-					  ${recipe.isFavorite ? '❤️' : '🤍'}
-					</button>
-					${(!recipe.approved && isAdmin)
-					  ? `<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>`
-					  : ''
-					}
-					<button class="icon-btn" onclick="editRecipe('${recipe.id}')" title="Edit">✏️</button>
-					<button class="icon-btn" onclick="printRecipe('${recipe.id}')" title="Print">🖨️</button>
-					<button class="icon-btn" onclick="deleteRecipe('${recipe.id}')" title="Delete" style="color: var(--danger);">🗑️</button>
-				  </div>
-				</div>
-				<!-- rest of card... -->
-			  </div>
-			</div>
-		  `).join('');
-		}
-		// Render pending recipes for admin approval
-function renderApprovalGrid() {
-    const grid = document.getElementById('approvalGrid');
-    const noMessage = document.getElementById('noPendingMessage');
-    
-    // Filter only pending recipes
-    const pendingRecipes = recipes.filter(r => !r.approved);
-    
-    console.log('📋 Rendering approval grid. Pending recipes:', pendingRecipes.length);
-    
-    if (pendingRecipes.length === 0) {
-        grid.innerHTML = '';
-        noMessage.style.display = 'block';
-        return;
-    }
-    
-    noMessage.style.display = 'none';
-    
-    grid.innerHTML = pendingRecipes.map(recipe => `
-        <div class="recipe-card" style="border: 2px solid var(--warning);">
-            ${recipe.image
-                ? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
-                : `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
-            }
-            <div class="recipe-content">
-                <div class="recipe-header">
-                    <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
-                    <div class="recipe-actions">
-                        <button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
-                        <button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
-                    </div>
-                </div>
-                <div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING APPROVAL</div>
-                <div class="recipe-info">
-                    <div>👥 Servings: ${recipe.servings}</div>
-                    <div>⏱️ Prep Time: ${recipe.prepTime} mins</div>
-                    <div>🧑‍🍳 Submitted by: ${recipe.submittedBy || 'Unknown'}</div>
-                </div>
-                <ul class="ingredients-list">
-                    ${(recipe.ingredients || []).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
-                </ul>
-                <div style="display:flex;gap:8px;margin-top:10px;">
-                    <button class="btn btn-small" onclick="openRecipeModal('${recipe.id}')">View Details</button>
-                    <button class="btn btn-small" onclick="approveRecipe('${recipe.id}')" style="background:var(--accent);">✅ Approve</button>
-                    <button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-// Render pending recipes for admin approval
-		function renderApprovalGrid() {
-			const grid = document.getElementById('approvalGrid');
-			const noMessage = document.getElementById('noPendingMessage');
-			
-			// Filter only pending recipes
-			const pendingRecipes = recipes.filter(r => !r.approved);
-			
-			console.log('📋 Rendering approval grid. Pending recipes:', pendingRecipes.length);
-			
-			if (pendingRecipes.length === 0) {
-				grid.innerHTML = '';
-				noMessage.style.display = 'block';
+        async function rateRecipe(recipeId, rating) {
+			const cu = getCurrentUser();
+			if (!cu) {
+				alert('❌ Please log in to rate recipes');
 				return;
 			}
 			
-			noMessage.style.display = 'none';
-			
-			grid.innerHTML = pendingRecipes.map(recipe => `
-				<div class="recipe-card" style="border: 2px solid var(--warning);">
-					${recipe.image
-						? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
-						: `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
-					}
-					<div class="recipe-content">
-						<div class="recipe-header">
-							<div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
-							<div class="recipe-actions">
-								<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
-								<button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
-							</div>
-						</div>
-						<div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING APPROVAL</div>
-						<div class="recipe-info">
-							<div>👥 Servings: ${recipe.servings}</div>
-							<div>⏱️ Prep Time: ${recipe.prepTime} mins</div>
-							<div>🧑‍🍳 Submitted by: ${recipe.submittedBy || 'Unknown'}</div>
-						</div>
-						<ul class="ingredients-list">
-							${(recipe.ingredients || []).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
-						</ul>
-						<div style="display:flex;gap:8px;margin-top:10px;">
-							<button class="btn btn-small" onclick="openRecipeModal('${recipe.id}')">View Details</button>
-							<button class="btn btn-small" onclick="approveRecipe('${recipe.id}')" style="background:var(--accent);">✅ Approve</button>
-							<button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
-						</div>
-					</div>
-				</div>
-			`).join('');
-		}
-		
-		async function rejectRecipe(id) {
-			if (!confirm('Reject and delete this recipe permanently?')) return;
+			if (rating < 1 || rating > 5) {
+				alert('❌ Rating must be between 1 and 5 stars');
+				return;
+			}
 			
 			try {
-				console.log('❌ Rejecting recipe ID:', id);
+				console.log(`⭐ Rating recipe ${recipeId} with ${rating} stars`);
 				
-				const cu = getCurrentUser();
-				if (!cu || !cu.is_admin) {
-					alert('Only admins can reject recipes');
-					return;
+				// IMMEDIATE VISUAL UPDATE - Update the "Your Rating" section right away
+				const yourRatingContainer = document.querySelector('#yourRatingStars');
+				if (yourRatingContainer) {
+					yourRatingContainer.innerHTML = renderStarRating(rating, true, recipeId);
 				}
 				
-				await supaFetch('recipes', { 
-					method: 'DELETE', 
-					query: `id=eq.${encodeURIComponent(String(id))}` 
+				const userId = cu.id;
+				
+				// Save to database in background
+				const existingRatings = await supaFetch('ratings', {
+					method: 'GET',
+					query: `user_id=eq.${userId}&recipe_id=eq.${recipeId}`
 				});
 				
-				console.log('✅ Recipe rejected and deleted');
-				
-				// Remove from local state
-				recipes = recipes.filter(r => String(r.id) !== String(id));
-				
-				// Refresh UI
-				renderApprovalGrid();
-				
-				// Close modal if open
-				const modal = document.getElementById('recipeDetailsModal');
-				if (modal.classList.contains('active')) {
-					closeRecipeModal();
+				if (existingRatings && existingRatings.length > 0) {
+					await supaFetch('ratings', {
+						method: 'PATCH',
+						query: `user_id=eq.${userId}&recipe_id=eq.${recipeId}`,
+						body: { rating: rating }
+					});
+					console.log('✅ Rating updated');
+				} else {
+					await supaFetch('ratings', {
+						method: 'POST',
+						body: {
+							recipe_id: recipeId,
+							user_id: userId,
+							rating: rating
+						}
+					});
+					console.log('✅ Rating added');
 				}
 				
-				alert('✅ Recipe rejected and deleted!');
-			} catch(e) {
-				console.error('❌ Reject failed:', e);
-				alert('Failed to reject: ' + e.message);
+				// Refresh recipes to show updated average
+				await refreshRecipesFromSupabase();
+				
+				// Update the average rating display in the modal WITHOUT closing it
+				const recipe = recipes.find(r => String(r.id) === String(recipeId));
+				if (recipe) {
+					const avgContainer = document.querySelector('#averageRatingDisplay');
+					if (avgContainer) {
+						avgContainer.innerHTML = `
+							<div style="display: flex; align-items: center; gap: 8px;">
+								${renderStarRating(recipe.averageRating || 0, false)}
+								<span style="color: var(--text-secondary); font-size: 0.9em;">
+									${(recipe.averageRating || 0).toFixed(1)} (${recipe.ratingCount || 0} ${recipe.ratingCount === 1 ? 'rating' : 'ratings'})
+								</span>
+							</div>
+						`;
+					}
+				}
+				
+				// Show subtle success message
+				const successMsg = document.createElement('div');
+				successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; animation: slideIn 0.3s ease;';
+				successMsg.textContent = `✅ You rated this ${rating} stars!`;
+				document.body.appendChild(successMsg);
+				
+				setTimeout(() => {
+					successMsg.style.animation = 'slideOut 0.3s ease';
+					setTimeout(() => successMsg.remove(), 300);
+				}, 2000);
+				
+			} catch (e) {
+				console.error('❌ Rating failed:', e);
+				alert('Failed to rate recipe: ' + e.message);
 			}
 		}
-		// ---------- Meal planner (string-safe) ----------
-		function renderMealPlanner() {
-		  const container = document.getElementById('mealPlanner');
-		  const days = Object.keys(mealPlan);
-		  container.innerHTML = days.map(day => {
-			const options = recipes.map(r => `<option value="${String(r.id)}">${r.name}</option>`).join('');
-			const slots = (mealPlan[day] || []).map((mealId, index) => {
-			  const rec = recipes.find(rr => String(rr.id) === String(mealId));
-			  return rec
-				? `<div class="meal-slot"><span>${rec.name}</span><button onclick="removeMealFromDay('${day}', ${index})" style="background:none;border:none;cursor:pointer;">❌</button></div>`
-				: '';
-			}).join('');
-			return `
-			  <div class="day-card">
-				<h3>${day}</h3>
-				<select onchange="addMealToDay('${day}', this.value)" style="width: 100%; margin-bottom: 10px;">
-				  <option value="">Add meal...</option>
-				  ${options}
-				</select>
-				<div id="${day}-meals">${slots}</div>
-			  </div>
+				
+        async function getUserRating(recipeId) {
+            const cu = getCurrentUser();
+            if (!cu) return 0;
+            
+            try {
+                const userId = cu.id;
+                const ratings = await supaFetch('ratings', {
+                    method: 'GET',
+                    query: `user_id=eq.${userId}&recipe_id=eq.${recipeId}`
+                });
+                
+                return ratings && ratings.length > 0 ? ratings[0].rating : 0;
+                
+            } catch (e) {
+                console.error('Failed to get user rating:', e);
+                return 0;
+            }
+        }
+        
+        function renderStarRating(rating, isInteractive = false, recipeId = null) {
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = rating % 1 >= 0.5;
+            const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+            
+            let html = '<div class="star-rating">';
+            
+            // Full stars
+            for (let i = 0; i < fullStars; i++) {
+                if (isInteractive && recipeId) {
+                    html += `<span class="star interactive" onclick="rateRecipe('${recipeId}', ${i + 1})" style="color: #FFD700;">⭐</span>`;
+                } else {
+                    html += '<span class="star" style="color: #FFD700;">⭐</span>';
+                }
+            }
+            
+            // Half star
+            if (hasHalfStar) {
+                html += '<span class="star" style="color: #FFD700;">⭐</span>';
+            }
+            
+            // Empty stars
+            for (let i = 0; i < emptyStars; i++) {
+                if (isInteractive && recipeId) {
+                    html += `<span class="star interactive" onclick="rateRecipe('${recipeId}', ${fullStars + (hasHalfStar ? 1 : 0) + i + 1})" style="color: #ddd;">☆</span>`;
+                } else {
+                    html += '<span class="star" style="color: #ddd;">☆</span>';
+                }
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        // ===================== Recipe Modal (UPDATED) =====================
+        
+        async function openRecipeModal(recipeId) {
+			const r = recipes.find(x => String(x.id) === String(recipeId));
+			if (!r) return;
+
+			const img = r.image ? `<img src="${r.image}" alt="${r.name}" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:10px;">` : '';
+			const ing = (r.ingredients || []).map(i => `<li>${i.amount} ${i.unit} ${i.item}</li>`).join('');
+			const instr = (r.instructions || '').replace(/\n/g, '<br>');
+
+			const cu = getCurrentUser();
+			const isAdmin = cu?.is_admin || false;
+			
+			// Get user's rating
+			const userRating = cu ? await getUserRating(recipeId) : 0;
+
+			document.getElementById('rdmTitle').textContent = r.name;
+			document.getElementById('rdmBody').innerHTML = `
+				${img}
+				<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+					<span class="recipe-category">${r.category}${r.approved ? '' : ' • Pending'}</span>
+					<span>👥 ${r.servings} servings</span>
+					<span>⏱️ ${r.prepTime} mins</span>
+					<span>👨‍🍳 ${r.submittedBy || 'Unknown'}</span>
+				</div>
+				
+				<!-- RATING SECTION with IDs for easy updating -->
+				<div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+					<div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+						<div>
+							<div style="font-weight: 600; margin-bottom: 5px;">Average Rating:</div>
+							<div id="averageRatingDisplay">
+								<div style="display: flex; align-items: center; gap: 8px;">
+									${renderStarRating(r.averageRating || 0, false)}
+									<span style="color: var(--text-secondary); font-size: 0.9em;">
+										${(r.averageRating || 0).toFixed(1)} (${r.ratingCount || 0} ${r.ratingCount === 1 ? 'rating' : 'ratings'})
+									</span>
+								</div>
+							</div>
+						</div>
+						${cu ? `
+							<div style="border-left: 1px solid var(--border); padding-left: 15px;">
+								<div style="font-weight: 600; margin-bottom: 5px;">Your Rating:</div>
+								<div id="yourRatingStars">
+									${renderStarRating(userRating || 0, true, recipeId)}
+								</div>
+								<div style="color: var(--text-secondary); font-size: 0.85em; margin-top: 3px;">
+									${userRating > 0 ? 'Click star to change' : 'Click star to rate'}
+								</div>
+							</div>
+						` : `
+							<div style="border-left: 1px solid var(--border); padding-left: 15px;">
+								<span style="color: var(--text-secondary); font-size: 0.9em;">Log in to rate this recipe</span>
+							</div>
+						`}
+					</div>
+				</div>
+				
+				<h3 style="margin:8px 0 6px;">Ingredients</h3>
+				<ul class="ingredients-list" style="max-height:220px;overflow:auto;">${ing || '<li>No ingredients recorded.</li>'}</ul>
+				<h3 style="margin:10px 0 6px;">Instructions</h3>
+				<div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:260px;overflow:auto;">${instr || 'No instructions provided.'}</div>
+				<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+					<button class="btn btn-small" onclick="addToMealPlan('${r.id}')">Add to Meal Plan</button>
+					${(!r.approved && isAdmin) ? `<button class="btn btn-secondary btn-small" onclick="approveRecipe('${r.id}')">✅ Approve</button>` : ''}
+					<button class="btn btn-secondary btn-small" onclick="editRecipe('${r.id}')">✏️ Edit</button>
+					<button class="btn btn-secondary btn-small" onclick="printRecipe('${r.id}')">🖨️ Print</button>
+					<button class="btn btn-danger btn-small" onclick="deleteRecipe('${r.id}')">🗑️ Remove</button>
+				</div>
 			`;
-		  }).join('');
+			document.getElementById('recipeDetailsModal').classList.add('active');
 		}
 
-		function addToMealPlan(recipeId) {
-		  const days = Object.keys(mealPlan);
-		  const day = prompt('Add to which day? (' + days.join(', ') + ')');
-		  if (day && mealPlan[day] !== undefined) {
-			mealPlan[day].push(String(recipeId));
-			renderMealPlanner();
-			alert('Added to ' + day + '!');
-		  }
-		}
+        function closeRecipeModal() {
+            document.getElementById('recipeDetailsModal').classList.remove('active');
+        }
 
-		function addMealToDay(day, recipeId) {
-		  if (!recipeId) return;
-		  mealPlan[day] = mealPlan[day] || [];
-		  mealPlan[day].push(String(recipeId));
-		  renderMealPlanner();
-		}
+        // ===================== Render Recipes (UPDATED) =====================
+        
+        async function renderRecipes() {
+            const grid = document.getElementById('recipeGrid');
+            const favoritesOnly = document.getElementById('favoritesOnly').checked;
+            const categoryFilter = document.getElementById('categoryFilter').value;
 
-		function removeMealFromDay(day, index) {
-		  if (!mealPlan[day]) return;
-		  mealPlan[day].splice(index, 1);
-		  renderMealPlanner();
-		}
-		
+            const cu = getCurrentUser();
+            const isAdmin = cu?.is_admin || false;
 
+            let filteredRecipes = recipes;
+            if (favoritesOnly) filteredRecipes = filteredRecipes.filter(r => r.isFavorite);
+            if (categoryFilter) filteredRecipes = filteredRecipes.filter(r => r.category === categoryFilter);
 
+            grid.innerHTML = filteredRecipes.map(recipe => `
+                <div class="recipe-card">
+                    ${recipe.image
+                        ? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
+                        : `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+                    }
+                    <div class="recipe-content">
+                        <div class="recipe-header">
+                            <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
+                            <div class="recipe-actions">
+                                <button class="icon-btn ${recipe.isFavorite ? 'active' : ''}" onclick="toggleFavorite('${recipe.id}')" title="Favorite">
+                                    ${recipe.isFavorite ? '❤️' : '🤍'}
+                                </button>
+                                ${(!recipe.approved && isAdmin) ? `<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>` : ''}
+                                <button class="icon-btn" onclick="editRecipe('${recipe.id}')" title="Edit">✏️</button>
+                                <button class="icon-btn" onclick="deleteRecipe('${recipe.id}')" title="Remove from My Recipes">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="recipe-category">${recipe.category}</div>
+                        
+                        <!-- RATING DISPLAY -->
+                        <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+                            ${renderStarRating(recipe.averageRating || 0, false)}
+                            <span style="color: var(--text-secondary); font-size: 0.85em;">
+                                ${(recipe.averageRating || 0).toFixed(1)} (${recipe.ratingCount || 0})
+                            </span>
+                        </div>
+                        
+                        <div class="recipe-info">
+                            <div>👥 ${recipe.servings} servings</div>
+                            <div>⏱️ ${recipe.prepTime} mins</div>
+                        </div>
+                        <ul class="ingredients-list">
+                            ${(recipe.ingredients || []).slice(0, 3).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
+                            ${recipe.ingredients.length > 3 ? '<li>...</li>' : ''}
+                        </ul>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ===================== Approval Grid =====================
+        
+        function renderApprovalGrid() {
+            const grid = document.getElementById('approvalGrid');
+            const noMessage = document.getElementById('noPendingMessage');
+            
+            const pendingRecipes = recipes.filter(r => !r.approved);
+            
+            if (pendingRecipes.length === 0) {
+                grid.innerHTML = '';
+                noMessage.style.display = 'block';
+                return;
+            }
+            
+            noMessage.style.display = 'none';
+            
+            grid.innerHTML = pendingRecipes.map(recipe => `
+                <div class="recipe-card" style="border: 2px solid var(--warning);">
+                    ${recipe.image
+                        ? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
+                        : `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+                    }
+                    <div class="recipe-content">
+                        <div class="recipe-header">
+                            <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
+                            <div class="recipe-actions">
+                                <button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
+                                <button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
+                            </div>
+                        </div>
+                        <div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING</div>
+                        <div class="recipe-info">
+                            <div>👥 ${recipe.servings}</div>
+                            <div>⏱️ ${recipe.prepTime} mins</div>
+                            <div>👨‍🍳 ${recipe.submittedBy}</div>
+                        </div>
+                        <ul class="ingredients-list">
+                            ${(recipe.ingredients || []).slice(0, 3).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
+                        </ul>
+                        <div style="display:flex;gap:8px;margin-top:10px;">
+                            <button class="btn btn-small" onclick="approveRecipe('${recipe.id}')">✅ Approve</button>
+                            <button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ===================== Delete Recipe (FIXED - Removes from user collection only!) =====================
+        
+        async function deleteRecipe(id) {
+            const cu = getCurrentUser();
+            if (!cu) {
+                alert('❌ Please log in to manage your recipes');
+                return;
+            }
+            
+            if (!confirm('Remove this recipe from your collection?')) return;
+            
+            try {
+                console.log('🗑️ Removing recipe from user collection. Recipe ID:', id);
+                
+                const userId = cu.id;
+                
+                // Remove from user_recipes junction table ONLY
+                await supaFetch('user_recipes', {
+                    method: 'DELETE',
+                    query: `user_id=eq.${userId}&recipe_id=eq.${encodeURIComponent(String(id))}`
+                });
+                
+                console.log('✅ Recipe removed from your collection');
+                
+                // Remove from local state
+                recipes = recipes.filter(r => String(r.id) !== String(id));
+                
+                // Remove from meal plan
+                Object.keys(mealPlan).forEach(day => {
+                    mealPlan[day] = mealPlan[day].filter(x => String(x) !== String(id));
+                });
+                
+                // Refresh UI
+                renderRecipes();
+                renderMealPlanner();
+                
+                // Close modal if open
+                const modal = document.getElementById('recipeDetailsModal');
+                if (modal.classList.contains('active')) {
+                    closeRecipeModal();
+                }
+                
+                alert('✅ Recipe removed from your collection!');
+                
+            } catch (e) {
+                console.error('❌ Remove failed:', e);
+                alert('Failed to remove recipe: ' + e.message);
+            }
+        }
+
+        // ===================== Recipe CRUD Operations =====================
+        
         function toggleFavorite(recipeId) {
-            const recipe = recipes.find(r => r.id === recipeId);
-            if (recipe) { recipe.isFavorite = !recipe.isFavorite; renderRecipes(); }
+            const recipe = recipes.find(r => String(r.id) === String(recipeId));
+            if (recipe) {
+                recipe.isFavorite = !recipe.isFavorite;
+                renderRecipes();
+            }
         }
 
         function filterRecipes() {
@@ -1025,13 +2615,18 @@ function renderApprovalGrid() {
             clearRecipeForm();
             document.getElementById('addRecipeModal').classList.add('active');
         }
+
         function guardedShowAddRecipeModal() {
             const cu = getCurrentUser();
-            if (!cu) { openAuth('login'); return; }
+            if (!cu) {
+                openAuth('login');
+                return;
+            }
             showAddRecipeModal();
         }
+
         function editRecipe(recipeId) {
-            const recipe = recipes.find(r => r.id === recipeId);
+            const recipe = recipes.find(r => String(r.id) === String(recipeId));
             if (recipe) {
                 editingRecipeId = recipeId;
                 document.getElementById('modalTitle').textContent = 'Edit Recipe';
@@ -1049,6 +2644,7 @@ function renderApprovalGrid() {
                 document.getElementById('addRecipeModal').classList.add('active');
             }
         }
+
         function clearRecipeForm() {
             document.getElementById('newRecipeName').value = '';
             document.getElementById('newRecipeCategory').value = 'Miscellaneous';
@@ -1057,13 +2653,18 @@ function renderApprovalGrid() {
             document.getElementById('newRecipeIngredients').value = '';
             document.getElementById('newRecipeInstructions').value = '';
             document.getElementById('newRecipeImageUrl').value = '';
-            const ip = document.getElementById('imagePreview'); ip.style.display = 'none'; ip.src='';
-            const rp = document.getElementById('recipePhoto'); if (rp) rp.value = '';
+            const ip = document.getElementById('imagePreview');
+            ip.style.display = 'none';
+            ip.src = '';
+            const rp = document.getElementById('recipePhoto');
+            if (rp) rp.value = '';
         }
+
         function closeAddRecipeModal() {
             document.getElementById('addRecipeModal').classList.remove('active');
             clearRecipeForm();
         }
+
         function previewImage(event) {
             const file = event.target.files[0];
             if (file) {
@@ -1076,309 +2677,249 @@ function renderApprovalGrid() {
             }
         }
 
-        // Create or update recipe to Supabase
-		async function saveRecipe() {
-		  try {
-			// form inputs
-			const name = document.getElementById('newRecipeName').value.trim();
-			const category = document.getElementById('newRecipeCategory').value || 'Miscellaneous';
-			const servings = parseInt(document.getElementById('newRecipeServings').value) || 4;
-			const prepTime = parseInt(document.getElementById('newRecipePrepTime').value) || 30;
-			const ingredientsText = document.getElementById('newRecipeIngredients').value || '';
-			const instructions = document.getElementById('newRecipeInstructions').value || '';
-			const imageUrlTyped = document.getElementById('newRecipeImageUrl').value.trim();
-			const fileInput = document.getElementById('recipePhoto');
+        async function saveRecipe() {
+            try {
+                const cu = getCurrentUser();
+                if (!cu) {
+                    alert('❌ Please log in to save recipes');
+                    return;
+                }
 
-			if (!name || !ingredientsText) {
-			  alert('Please fill in name and ingredients');
-			  return;
-			}
+                const name = document.getElementById('newRecipeName').value.trim();
+                const category = document.getElementById('newRecipeCategory').value || 'Miscellaneous';
+                const servings = parseInt(document.getElementById('newRecipeServings').value) || 4;
+                const prepTime = parseInt(document.getElementById('newRecipePrepTime').value) || 30;
+                const ingredientsText = document.getElementById('newRecipeIngredients').value || '';
+                const instructions = document.getElementById('newRecipeInstructions').value || '';
+                const imageUrlTyped = document.getElementById('newRecipeImageUrl').value.trim();
+                const fileInput = document.getElementById('recipePhoto');
 
-			// Parse ingredients textarea -> array of {item, amount, unit}
-			const ingredients = ingredientsText.split('\n')
-			  .filter(line => line.trim().length)
-			  .map(line => {
-				const parts = line.trim().split(/\s+/);
-				const amount = parseFloat((parts[0] || '0').replace(/[^\d.]/g, '')) || 1;
-				const unit = (parts[1] || '').toLowerCase();
-				const item = parts.slice(2).join(' ') || parts.slice(1).join(' ');
-				return { item, amount, unit };
-			  });
+                if (!name || !ingredientsText) {
+                    alert('Please fill in name and ingredients');
+                    return;
+                }
 
-			// Decide final image_url:
-			// 1) if a file is picked, upload to Storage and use its public URL
-			// 2) else, use the typed URL (if any)
-			let image_url = imageUrlTyped;
-			if (fileInput && fileInput.files && fileInput.files[0]) {
-			  image_url = await uploadRecipeImage(fileInput.files[0]);
-			}
+                const ingredients = ingredientsText.split('\n')
+                    .filter(line => line.trim().length)
+                    .map(line => {
+                        const parts = line.trim().split(/\s+/);
+                        const amount = parseFloat((parts[0] || '0').replace(/[^\d.]/g, '')) || 1;
+                        const unit = (parts[1] || '').toLowerCase();
+                        const item = parts.slice(2).join(' ') || parts.slice(1).join(' ');
+                        return { item, amount, unit };
+                    });
 
-			// Who is submitting (your current local user system)
-			const cu = getCurrentUser();
-			const submitted_by = cu ? (findUser(cu.username)?.name || cu.username) : 'guest';
+                let image_url = imageUrlTyped;
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    image_url = await uploadRecipeImage(fileInput.files[0]);
+                }
 
-			// Build row for Supabase
-			const row = {
-			  name,
-			  category,
-			  servings,
-			  prep_time: prepTime,
-			  ingredients,
-			  instructions,
-			  image_url,
-			  submitted_by,
-			  approved: false
-			};
+                const submitted_by = cu.name || cu.username;
 
-			// Create or update?
-			if (editingRecipeId) {
-			  // UPDATE
-			  await supaFetch('recipes', {
-				method: 'PATCH',
-				query: `id=eq.${encodeURIComponent(editingRecipeId)}`,
-				body: row
-			  });
-			  alert('Recipe updated (pending approval).');
-			} else {
-			  // INSERT
-			  await supaFetch('recipes', {
-				method: 'POST',
-				body: row
-			  });
-			  alert(`"${name}" has been added (pending approval).`);
-			}
+                const row = {
+                    name,
+                    category,
+                    servings,
+                    prep_time: prepTime,
+                    ingredients,
+                    instructions,
+                    image_url,
+                    submitted_by,
+                    approved: false
+                };
 
-			await refreshRecipesFromSupabase();
-			closeAddRecipeModal();
-			clearRecipeForm();
-		  } catch (e) {
-			console.error(e);
-			alert('Failed to save: ' + (e.message || e));
-		  }
-		}
+                let recipeId;
+                if (editingRecipeId) {
+                    await supaFetch('recipes', {
+                        method: 'PATCH',
+                        query: `id=eq.${encodeURIComponent(editingRecipeId)}`,
+                        body: row
+                    });
+                    recipeId = editingRecipeId;
+                    alert('Recipe updated!');
+                } else {
+                    const result = await supaFetch('recipes', {
+                        method: 'POST',
+                        body: row
+                    });
+                    recipeId = Array.isArray(result) ? result[0].id : result.id;
+                    alert(`"${name}" has been added!`);
+                }
 
-		async function approveRecipe(id) {
-		  try {
-			console.log('🔄 Approving recipe ID:', id);
-			
-			// Check if user is admin
-			const cu = getCurrentUser();
-			const user = cu ? findUser(cu.username) : null;
-			
-			console.log('👤 User check - Username:', cu?.username, 'Is Admin:', user?.isAdmin);
-			
-			if (!user || !user.isAdmin) {
-			  alert('❌ Only admins can approve recipes');
-			  return;
-			}
-			
-			if (!confirm('Approve this recipe?')) return;
-			
-			console.log('📤 Sending PATCH request to approve...');
-			
-			// Update directly via Supabase REST API
-			const result = await supaFetch('recipes', {
-			  method: 'PATCH',
-			  query: `id=eq.${encodeURIComponent(String(id))}`,
-			  body: { approved: true }
-			});
-			
-			console.log('✅ Approve result:', result);
-			
-			// Update local state
-			const recipe = recipes.find(r => String(r.id) === String(id));
-			if (recipe) {
-			  recipe.approved = true;
-			  console.log('✅ Local recipe updated - approved:', recipe.approved);
-			} else {
-			  console.warn('⚠️ Recipe not found in local state');
-			}
-			
-			// Refresh from database to ensure sync
-			console.log('🔄 Refreshing recipes from database...');
-			await refreshRecipesFromSupabase();
-			
-			// Re-render the grid
-			renderRecipes();
-			renderApprovalGrid();
+                // ADD TO USER'S COLLECTION
+                try {
+                    await supaFetch('user_recipes', {
+                        method: 'POST',
+                        body: {
+                            user_id: cu.id,
+                            recipe_id: recipeId
+                        }
+                    });
+                } catch (e) {
+                    console.log('Recipe already in collection or error:', e);
+                }
 
-			// Update modal if it's still open
-			const modal = document.getElementById('recipeDetailsModal');
-			if (modal.classList.contains('active')) {
-				console.log('🔄 Updating open modal...');
-				// Reopen the modal with updated data
-				closeRecipeModal();
-				setTimeout(() => openRecipeModal(id), 100);
-			}
-			
-			alert('✅ Recipe approved successfully!');
-		  } catch (e) {
-			console.error('❌ Approve failed:', e);
-			alert('Failed to approve recipe:\n\n' + (e.message || e));
-		  }
-		}
-		async function deleteRecipe(id) {
-			if (!confirm('Delete this recipe permanently?')) return;
-			
-			try {
-				console.log('🗑️ Deleting recipe ID:', id);
-				
-				await supaFetch('recipes', { 
-					method: 'DELETE', 
-					query: `id=eq.${encodeURIComponent(String(id))}` 
-				});
-				
-				console.log('✅ Recipe deleted from database');
-				
-				// Remove from local state
-				recipes = recipes.filter(r => String(r.id) !== String(id));
-				
-				// Remove from meal plan
-				Object.keys(mealPlan).forEach(day => { 
-					mealPlan[day] = mealPlan[day].filter(x => String(x) !== String(id)); 
-				});
-				
-				// Refresh from database to ensure sync
-				await refreshRecipesFromSupabase();
-				
-				// Refresh UI
-				renderRecipes(); 
-				renderMealPlanner();
-				
-				// Close modal if open
-				const modal = document.getElementById('recipeDetailsModal');
-				if (modal.classList.contains('active')) {
-					closeRecipeModal();
-				}
-				
-				alert('✅ Recipe deleted successfully!');
-			} catch(e) {
-				console.error('❌ Delete failed:', e);
-				alert('Failed to delete: ' + e.message);
-			}
-		}
-		async function rejectRecipe(id) {
-			if (!confirm('Reject and delete this recipe permanently?')) return;
-			
-			try {
-				console.log('❌ Rejecting recipe ID:', id);
-				
-				const cu = getCurrentUser();
-				if (!cu || !cu.is_admin) {
-					alert('❌ Only admins can reject recipes');
-					return;
-				}
-				
-				await supaFetch('recipes', { 
-					method: 'DELETE', 
-					query: `id=eq.${encodeURIComponent(String(id))}` 
-				});
-				
-				console.log('✅ Recipe rejected and deleted');
-				
-				// Remove from local state
-				recipes = recipes.filter(r => String(r.id) !== String(id));
-				
-				// Refresh UI
-				renderApprovalGrid();
-				renderRecipes();
-				
-				// Close modal if open
-				const modal = document.getElementById('recipeDetailsModal');
-				if (modal.classList.contains('active')) {
-					closeRecipeModal();
-				}
-				
-				alert('✅ Recipe rejected and deleted!');
-			} catch(e) {
-				console.error('❌ Reject failed:', e);
-				alert('Failed to reject: ' + e.message);
-			}
-		}
-		// Fetch recipes: approved OR submitted_by == current user OR user is admin
-		async function refreshRecipesFromSupabase() {
-			const cu = getCurrentUser();
-			const isAdmin = cu?.is_admin || false;
-			
-			console.log('🔄 Refreshing recipes from Supabase. User:', cu?.username, 'Admin:', isAdmin);
-			
-			const select = encodeURIComponent('id,name,category,servings,prep_time,ingredients,instructions,image_url,submitted_by,approved,created_at');
-			
-			let query;
-			if (isAdmin) {
-				// Admins see everything
-				query = `select=${select}&order=created_at.desc`;
-				console.log('👑 Admin mode - loading all recipes');
-				
-				// Show approval tab for admin
-				document.getElementById('approvalTab').style.display = 'block';
-			} else if (cu) {
-				// Regular users see: approved recipes OR their own submissions
-				const me = cu.name || cu.username;
-				const or = encodeURIComponent(`approved.eq.true,submitted_by.eq.${me}`);
-				query = `select=${select}&or=(${or})&order=created_at.desc`;
-				console.log('👤 User mode - loading approved + own recipes');
-				
-				// Hide approval tab for non-admin
-				document.getElementById('approvalTab').style.display = 'none';
-			} else {
-				// Not logged in: only see approved
-				query = `select=${select}&approved=eq.true&order=created_at.desc`;
-				console.log('👻 Guest mode - loading approved only');
-				
-				// Hide approval tab
-				document.getElementById('approvalTab').style.display = 'none';
-			}
-			
-			try {
-				const rows = await supaFetch('recipes', { method: 'GET', query });
-				recipes = rows.map(rowToRecipe);
-				renderRecipes();
-				console.log(`✅ Loaded ${recipes.length} recipes`);
-				
-				// Log pending count for admin
-				if (isAdmin) {
-					const pendingCount = recipes.filter(r => !r.approved).length;
-					console.log(`📊 Admin view - ${pendingCount} pending recipes`);
-					
-					// Update approval tab badge (optional)
-					const approvalTab = document.getElementById('approvalTab');
-					if (pendingCount > 0) {
-						approvalTab.textContent = `✅ Approval (${pendingCount})`;
-					} else {
-						approvalTab.textContent = '✅ Approval';
-					}
-				}
-			} catch(e) {
-				console.warn('❌ Supabase load failed:', e.message);
-			}
-		}
+                await refreshRecipesFromSupabase();
+                closeAddRecipeModal();
+                clearRecipeForm();
+            } catch (e) {
+                console.error(e);
+                alert('Failed to save: ' + (e.message || e));
+            }
+        }
 
-        // TheMealDB integration -> save to Supabase
+        async function approveRecipe(id) {
+            try {
+                const cu = getCurrentUser();
+                if (!cu || !cu.is_admin) {
+                    alert('❌ Only admins can approve recipes');
+                    return;
+                }
+                
+                if (!confirm('Approve this recipe?')) return;
+                
+                await supaFetch('recipes', {
+                    method: 'PATCH',
+                    query: `id=eq.${encodeURIComponent(String(id))}`,
+                    body: { approved: true }
+                });
+                
+                await refreshRecipesFromSupabase();
+                renderRecipes();
+                renderApprovalGrid();
+
+                const modal = document.getElementById('recipeDetailsModal');
+                if (modal.classList.contains('active')) {
+                    closeRecipeModal();
+                    setTimeout(() => openRecipeModal(id), 100);
+                }
+                
+                alert('✅ Recipe approved successfully!');
+            } catch (e) {
+                console.error('❌ Approve failed:', e);
+                alert('Failed to approve recipe: ' + e.message);
+            }
+        }
+
+        async function rejectRecipe(id) {
+            if (!confirm('Reject and delete this recipe permanently?')) return;
+            
+            try {
+                const cu = getCurrentUser();
+                if (!cu || !cu.is_admin) {
+                    alert('❌ Only admins can reject recipes');
+                    return;
+                }
+                
+                await supaFetch('recipes', {
+                    method: 'DELETE',
+                    query: `id=eq.${encodeURIComponent(String(id))}`
+                });
+                
+                recipes = recipes.filter(r => String(r.id) !== String(id));
+                
+                renderApprovalGrid();
+                renderRecipes();
+                
+                const modal = document.getElementById('recipeDetailsModal');
+                if (modal.classList.contains('active')) {
+                    closeRecipeModal();
+                }
+                
+                alert('✅ Recipe rejected and deleted!');
+            } catch(e) {
+                console.error('❌ Reject failed:', e);
+                alert('Failed to reject: ' + e.message);
+            }
+        }
+
+        async function refreshRecipesFromSupabase() {
+            const cu = getCurrentUser();
+            const isAdmin = cu?.is_admin || false;
+            
+            const select = encodeURIComponent('id,name,category,servings,prep_time,ingredients,instructions,image_url,submitted_by,approved,created_at,average_rating,rating_count');
+            
+            let query;
+            if (isAdmin) {
+                query = `select=${select}&order=created_at.desc`;
+                document.getElementById('approvalTab').style.display = 'block';
+            } else if (cu) {
+                // Get recipes user has saved
+                const userRecipes = await supaFetch('user_recipes', {
+                    method: 'GET',
+                    query: `user_id=eq.${cu.id}`
+                });
+                
+                if (userRecipes && userRecipes.length > 0) {
+                    const recipeIds = userRecipes.map(ur => ur.recipe_id).join(',');
+                    query = `select=${select}&id=in.(${recipeIds})&order=created_at.desc`;
+                } else {
+                    recipes = [];
+                    renderRecipes();
+                    return;
+                }
+                
+                document.getElementById('approvalTab').style.display = 'none';
+            } else {
+                query = `select=${select}&approved=eq.true&order=created_at.desc&limit=20`;
+                document.getElementById('approvalTab').style.display = 'none';
+            }
+            
+            try {
+                const rows = await supaFetch('recipes', { method: 'GET', query });
+                recipes = rows.map(rowToRecipe);
+                renderRecipes();
+                
+                if (isAdmin) {
+                    const pendingCount = recipes.filter(r => !r.approved).length;
+                    const approvalTab = document.getElementById('approvalTab');
+                    approvalTab.textContent = pendingCount > 0 ? `✅ Approval (${pendingCount})` : '✅ Approval';
+                }
+            } catch(e) {
+                console.warn('❌ Supabase load failed:', e.message);
+            }
+        }
+
+        // ===================== TheMealDB Integration =====================
+        
         async function fetchApiRecipes() {
             const container = document.getElementById('apiRecipesContainer');
             const category = document.getElementById('categoryFilter').value;
-            if (!category) { container.innerHTML = ''; return; }
-            container.innerHTML = '<div class="loading">Loading recipes from TheMealDB...</div>';
+            if (!category) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = '<div style="padding:20px;text-align:center;">Loading recipes from TheMealDB...</div>';
             try {
                 const response = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?c=${category}`);
                 const data = await response.json();
                 if (data.meals) {
                     container.innerHTML = `
                         <h3>📡 Online Recipes - ${category}</h3>
-                        <div class="api-recipes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px;">
                             ${data.meals.slice(0, 12).map(meal => `
-                                <div class="api-recipe-card" onclick="fetchRecipeDetails('${meal.idMeal}')" title="Click to add to your recipes" style="cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+                                <div onclick="fetchRecipeDetails('${meal.idMeal}')" title="Click to add to your recipes" style="cursor:pointer;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:transform 0.2s;">
                                     <img src="${meal.strMealThumb}" alt="${meal.strMeal}" style="width:100%;height:140px;object-fit:cover;">
-                                    <div style="padding:10px;"><h4 style="font-size:1em;">${meal.strMeal}</h4></div>
+                                    <div style="padding:10px;"><h4 style="font-size:1em;margin:0;">${meal.strMeal}</h4></div>
                                 </div>
                             `).join('')}
                         </div>`;
-                } else container.innerHTML = '<div class="loading">No online recipes found for this category</div>';
-            } catch (error) { container.innerHTML = '<div class="loading">Unable to load online recipes. Please check your connection.</div>'; }
+                } else {
+                    container.innerHTML = '<div style="padding:20px;text-align:center;">No online recipes found for this category</div>';
+                }
+            } catch (error) {
+                container.innerHTML = '<div style="padding:20px;text-align:center;">Unable to load online recipes. Please check your connection.</div>';
+            }
         }
+
         async function fetchRecipeDetails(mealId) {
             try {
+                const cu = getCurrentUser();
+                if (!cu) {
+                    alert('❌ Please log in to save recipes');
+                    return;
+                }
+
                 const response = await fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`);
                 const data = await response.json();
                 if (data.meals && data.meals[0]) {
@@ -1395,8 +2936,8 @@ function renderApprovalGrid() {
                             });
                         }
                     }
-                    const cu = getCurrentUser();
-                    const submitter = cu ? (findUser(cu.username)?.name || cu.username) : 'Unknown';
+                    
+                    const submitter = cu.name || cu.username;
 
                     const row = {
                         name: meal.strMeal,
@@ -1409,68 +2950,125 @@ function renderApprovalGrid() {
                         submitted_by: submitter,
                         approved: false
                     };
-                    await supaFetch('recipes', { method: 'POST', body: row, headers: { 'Prefer':'return=representation' } });
+
+                    const result = await supaFetch('recipes', {
+                        method: 'POST',
+                        body: row
+                    });
+
+                    const recipeId = Array.isArray(result) ? result[0].id : result.id;
+
+                    // ADD TO USER'S COLLECTION
+                    try {
+                        await supaFetch('user_recipes', {
+                            method: 'POST',
+                            body: {
+                                user_id: cu.id,
+                                recipe_id: recipeId
+                            }
+                        });
+                    } catch (e) {
+                        console.log('Recipe already in collection:', e);
+                    }
+
                     await refreshRecipesFromSupabase();
                     document.getElementById('apiRecipesContainer').innerHTML = '';
-                    alert(`"${meal.strMeal}" has been added (pending approval).`);
+                    alert(`"${meal.strMeal}" has been added to your recipes!`);
                 }
-            } catch (error) { alert('Failed to fetch/save recipe: ' + error.message); }
+            } catch (error) {
+                alert('Failed to fetch/save recipe: ' + error.message);
+            }
         }
 
-        // Pantry
+        // ===================== Pantry =====================
+        
         function renderPantry() {
             const container = document.getElementById('pantryItems');
             container.innerHTML = pantry.map((item, index) => `
                 <div class="pantry-item ${item.amount < 100 && item.unit === 'g' ? 'low-stock' : ''}">
-                    <div>${item.item}</div><div>${item.amount}</div><div>${item.unit}</div>
+                    <div>${item.item}</div>
+                    <div>${item.amount}</div>
+                    <div>${item.unit}</div>
                     <button class="btn btn-danger" onclick="removePantryItem(${index})">Remove</button>
                 </div>`).join('');
         }
+
         function addPantryItem() {
             const item = document.getElementById('pantryItem').value.trim();
             const amount = parseFloat(document.getElementById('pantryAmount').value);
             const unit = document.getElementById('pantryUnit').value;
-            if (!item || !amount) { alert('Please fill in all fields'); return; }
+            if (!item || !amount) {
+                alert('Please fill in all fields');
+                return;
+            }
             const existing = pantry.find(p => p.item.toLowerCase() === item.toLowerCase());
-            if (existing) existing.amount += amount; else pantry.push({ item, amount, unit });
-            document.getElementById('pantryItem').value = ''; document.getElementById('pantryAmount').value = '';
+            if (existing) existing.amount += amount;
+            else pantry.push({ item, amount, unit });
+            document.getElementById('pantryItem').value = '';
+            document.getElementById('pantryAmount').value = '';
             renderPantry();
         }
-        function removePantryItem(index) { pantry.splice(index, 1); renderPantry(); }
 
-        // Planner
+        function removePantryItem(index) {
+            pantry.splice(index, 1);
+            renderPantry();
+        }
+
+        // ===================== Meal Planner =====================
+        
         function renderMealPlanner() {
             const container = document.getElementById('mealPlanner');
             const days = Object.keys(mealPlan);
-            container.innerHTML = days.map(day => `
-                <div class="day-card">
-                    <h3>${day}</h3>
-                    <select onchange="addMealToDay('${day}', this.value)" style="width: 100%; margin-bottom: 10px;">
-                        <option value="">Add meal...</option>
-                        ${recipes.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}
-                    </select>
-                    <div id="${day}-meals">
-                        ${mealPlan[day].map((mealId, index) => {
-                            const recipe = recipes.find(r => r.id === mealId);
-                            return recipe ? `<div class="meal-slot"><span>${recipe.name}</span><button onclick="removeMealFromDay('${day}', ${index})" style="background:none;border:none;cursor:pointer;">❌</button></div>` : '';
-                        }).join('')}
+            container.innerHTML = days.map(day => {
+                const options = recipes.map(r => `<option value="${String(r.id)}">${r.name}</option>`).join('');
+                const slots = (mealPlan[day] || []).map((mealId, index) => {
+                    const rec = recipes.find(rr => String(rr.id) === String(mealId));
+                    return rec ? `<div class="meal-slot"><span>${rec.name}</span><button onclick="removeMealFromDay('${day}', ${index})" style="background:none;border:none;cursor:pointer;font-size:1.2em;">❌</button></div>` : '';
+                }).join('');
+                return `
+                    <div class="day-card">
+                        <h3>${day}</h3>
+                        <select onchange="addMealToDay('${day}', this.value)" style="width: 100%; margin-bottom: 10px;">
+                            <option value="">Add meal...</option>
+                            ${options}
+                        </select>
+                        <div id="${day}-meals">${slots}</div>
                     </div>
-                </div>`).join('');
+                `;
+            }).join('');
         }
+
         function addToMealPlan(recipeId) {
             const days = Object.keys(mealPlan);
             const day = prompt('Add to which day? (' + days.join(', ') + ')');
-            if (day && mealPlan[day] !== undefined) { mealPlan[day].push(recipeId); renderMealPlanner(); alert('Added to ' + day + '!'); }
+            if (day && mealPlan[day] !== undefined) {
+                mealPlan[day].push(String(recipeId));
+                renderMealPlanner();
+                closeRecipeModal();
+                alert('Added to ' + day + '!');
+            }
         }
-        function addMealToDay(day, recipeId) { if (recipeId) { mealPlan[day].push(parseInt(recipeId)); renderMealPlanner(); } }
-        function removeMealFromDay(day, index) { mealPlan[day].splice(index, 1); renderMealPlanner(); }
 
-        // Shopping list
+        function addMealToDay(day, recipeId) {
+            if (!recipeId) return;
+            mealPlan[day] = mealPlan[day] || [];
+            mealPlan[day].push(String(recipeId));
+            renderMealPlanner();
+        }
+
+        function removeMealFromDay(day, index) {
+            if (!mealPlan[day]) return;
+            mealPlan[day].splice(index, 1);
+            renderMealPlanner();
+        }
+
+        // ===================== Shopping List =====================
+        
         function updateShoppingList() {
             const container = document.getElementById('shoppingItems');
             const neededItems = {};
             Object.values(mealPlan).flat().forEach(recipeId => {
-                const recipe = recipes.find(r => r.id === recipeId);
+                const recipe = recipes.find(r => String(r.id) === String(recipeId));
                 if (recipe) recipe.ingredients.forEach(ing => {
                     if (!neededItems[ing.item]) neededItems[ing.item] = { amount: 0, unit: ing.unit };
                     neededItems[ing.item].amount += ing.amount;
@@ -1484,28 +3082,36 @@ function renderApprovalGrid() {
             });
             container.innerHTML = shoppingList.map(item => `
                 <div class="shopping-item ${item.sufficient ? 'in-pantry' : ''}">
-                    <div><strong>${item.item}</strong>
+                    <div>
+                        <strong>${item.item}</strong>
                         <div style="font-size:0.9em; color:var(--text-secondary);">Need: ${item.needed} ${item.unit} | Have: ${item.have} ${item.unit}</div>
                     </div>
                     <div>${item.toBuy > 0 ? `Buy: ${item.toBuy} ${item.unit}` : '✓ In Pantry'}</div>
                 </div>`).join('');
         }
 
-        // Print
+        // ===================== Print Functions =====================
+        
         function printMealPlanner() {
             const printContent = document.getElementById('mealPlanner').innerHTML;
             const original = document.body.innerHTML;
             document.body.innerHTML = `<h1>Weekly Meal Plan</h1><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;">${printContent}</div>`;
-            window.print(); document.body.innerHTML = original; location.reload();
+            window.print();
+            document.body.innerHTML = original;
+            location.reload();
         }
+
         function printShoppingList() {
             const printContent = document.getElementById('shoppingItems').innerHTML;
             const original = document.body.innerHTML;
             document.body.innerHTML = `<h1>Shopping List</h1><div>${printContent}</div>`;
-            window.print(); document.body.innerHTML = original; location.reload();
+            window.print();
+            document.body.innerHTML = original;
+            location.reload();
         }
+
         function printRecipe(id) {
-            const recipe = recipes.find(r => r.id === id);
+            const recipe = recipes.find(r => String(r.id) === String(id));
             if (!recipe) return;
             const w = window.open('', '_blank', 'width=820,height=600');
             const ing = recipe.ingredients.map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('');
@@ -1516,10 +3122,14 @@ function renderApprovalGrid() {
                 `<h3>Ingredients</h3><ul>${ing}</ul>` +
                 `<h3>Instructions</h3><pre style="white-space:pre-wrap">${recipe.instructions || ''}</pre>` +
                 `</body></html>`);
-            w.document.close(); w.focus(); w.print(); w.close();
+            w.document.close();
+            w.focus();
+            w.print();
+            w.close();
         }
 
-        // ===================== Auth UI Logic =====================
+        // ===================== Auth UI =====================
+        
         const authTrigger = document.getElementById('authTrigger');
         const authModal = document.getElementById('authModal');
         const profileModal = document.getElementById('profileModal');
@@ -1531,26 +3141,32 @@ function renderApprovalGrid() {
 
         authTrigger.addEventListener('click', () => openAuth('login'));
         profileBtn.addEventListener('click', () => openProfile());
-        logoutBtn.addEventListener('click', async () => { 
-			await setCurrentUser(null); 
-			console.log('👋 Logged out');
-		});
+        logoutBtn.addEventListener('click', async () => {
+            await setCurrentUser(null);
+            console.log('👋 Logged out');
+        });
 
-		function refreshHeaderUser() {
-			const cu = getCurrentUser();
-			if (!cu) {
-				userControls.style.display = 'none';
-				authTrigger.style.display = 'inline-flex';
-				return;
-			}
-			userControls.style.display = 'flex';
-			authTrigger.style.display = 'none';
-			headerName.textContent = cu.name || cu.username;
-			headerAvatar.src = cu.avatar_url || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PHJlY3Qgd2lkdGg9JzEwMCUnIGhlaWdodD0nMTAwJScgZmlsbD0nI2NjY2NjYycvPjxjaXJjbGUgY3g9JzMyJyBjeT0nMjQnIHI9JzEyJyBmaWxsPScjODg4ODg4Jy8+PHJlY3QgeD0nMTYnIHk9JzQwJyB3aWR0aD0nMzInIGhlaWdodD0nMTInIHJ4PSc2JyBmaWxsPScjYWFhYWFhJy8+PC9zdmc+';
-		}
+        function refreshHeaderUser() {
+            const cu = getCurrentUser();
+            if (!cu) {
+                userControls.style.display = 'none';
+                authTrigger.style.display = 'inline-flex';
+                return;
+            }
+            userControls.style.display = 'flex';
+            authTrigger.style.display = 'none';
+            headerName.textContent = cu.name || cu.username;
+            headerAvatar.src = cu.avatar_url || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PHJlY3Qgd2lkdGg9JzEwMCUnIGhlaWdodD0nMTAwJScgZmlsbD0nI2NjY2NjYycvPjxjaXJjbGUgY3g9JzMyJyBjeT0nMjQnIHI9JzEyJyBmaWxsPScjODg4ODg4Jy8+PHJlY3QgeD0nMTYnIHk9JzQwJyB3aWR0aD0nMzInIGhlaWdodD0nMTInIHJ4PSc2JyBmaWxsPScjYWFhYWFhJy8+PC9zdmc+';
+        }
 
-        function openAuth(mode='login') { switchAuthTab(mode); authModal.classList.add('active'); }
-        function closeAuth() { authModal.classList.remove('active'); }
+        function openAuth(mode = 'login') {
+            switchAuthTab(mode);
+            authModal.classList.add('active');
+        }
+
+        function closeAuth() {
+            authModal.classList.remove('active');
+        }
 
         function switchAuthTab(which) {
             document.getElementById('loginTab').classList.toggle('active', which === 'login');
@@ -1559,221 +3175,221 @@ function renderApprovalGrid() {
             document.getElementById('registerPane').style.display = which === 'register' ? 'block' : 'none';
         }
 
-        // Register
         const regAvatar = document.getElementById('regAvatar');
         const regAvatarPreview = document.getElementById('regAvatarPreview');
         regAvatar.addEventListener('change', e => {
-            const f = e.target.files[0]; if (!f) return;
+            const f = e.target.files[0];
+            if (!f) return;
             const r = new FileReader();
             r.onload = ev => regAvatarPreview.src = ev.target.result;
             r.readAsDataURL(f);
         });
 
-		async function doRegister() {
-			const username = document.getElementById('regUsername').value.trim();
-			const password = document.getElementById('regPassword').value;
-			const name = document.getElementById('regName').value.trim();
-			const email = document.getElementById('regEmail').value.trim();
-			
-			if (!username || !password) { 
-				alert('❌ Username and password are required.'); 
-				return; 
-			}
+        async function doRegister() {
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const name = document.getElementById('regName').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            
+            if (!username || !password) {
+                alert('❌ Username and password are required.');
+                return;
+            }
 
-			// Validate username length
-			if (username.length < 3) {
-				alert('❌ Username must be at least 3 characters long.');
-				return;
-			}
+            if (username.length < 3) {
+                alert('❌ Username must be at least 3 characters long.');
+                return;
+            }
 
-			// Validate password length
-			if (password.length < 4) {
-				alert('❌ Password must be at least 4 characters long.');
-				return;
-			}
+            if (password.length < 4) {
+                alert('❌ Password must be at least 4 characters long.');
+                return;
+            }
 
-			try {
-				console.log('🔍 Checking if username exists (case-insensitive):', username);
-				
-				// Check if username exists (case-insensitive)
-				// The database index will handle this, but we check first for better UX
-				const usersResult = await supaFetch('users', {
-					method: 'GET',
-					query: 'select=username'
-				});
+            try {
+                const usersResult = await supaFetch('users', {
+                    method: 'GET',
+                    query: 'select=username'
+                });
 
-				// Check if any existing username matches case-insensitively
-				const existingUser = usersResult.find(
-					u => u.username.toLowerCase() === username.toLowerCase()
-				);
+                const existingUser = usersResult.find(u => u.username.toLowerCase() === username.toLowerCase());
+                if (existingUser) {
+                    alert(`❌ Username "${existingUser.username}" already exists.`);
+                    return;
+                }
 
-				if (existingUser) {
-					alert(`❌ Username "${existingUser.username}" already exists. Please choose a different username.`);
-					return;
-				}
+                let avatarUrl = '';
+                const avatarFile = regAvatar.files[0];
+                if (avatarFile) {
+                    try {
+                        avatarUrl = await uploadRecipeImage(avatarFile);
+                    } catch (e) {
+                        console.warn('Avatar upload failed:', e);
+                    }
+                }
 
-				console.log('✅ Username available');
+                await supaFetch('users', {
+                    method: 'POST',
+                    body: {
+                        username,
+                        password,
+                        name: name || username,
+                        email,
+                        avatar_url: avatarUrl,
+                        is_admin: false
+                    }
+                });
+                
+                await setCurrentUser(username);
+                closeAuth();
+                alert(`✅ Welcome ${name || username}! Registration successful!`);
+                
+            } catch (e) {
+                console.error('Registration failed:', e);
+                if (e.message.includes('duplicate key') || e.message.includes('users_username_lower_idx')) {
+                    alert('❌ This username already exists.');
+                } else {
+                    alert('❌ Registration failed: ' + e.message);
+                }
+            }
+        }
 
-				// Upload avatar if selected
-				let avatarUrl = '';
-				const avatarFile = regAvatar.files[0];
-				if (avatarFile) {
-					try {
-						console.log('📤 Uploading avatar...');
-						avatarUrl = await uploadRecipeImage(avatarFile);
-						console.log('✅ Avatar uploaded:', avatarUrl);
-					} catch (e) {
-						console.warn('⚠️ Avatar upload failed:', e);
-						// Continue registration even if avatar fails
-					}
-				}
+        async function doLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!username || !password) {
+                alert('❌ Please enter both username and password.');
+                return;
+            }
+            
+            try {
+                const allUsers = await supaFetch('users', {
+                    method: 'GET',
+                    query: 'select=*'
+                });
 
-				console.log('📝 Creating new user...');
+                const user = allUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
 
-				// Insert new user
-				const result = await supaFetch('users', {
-					method: 'POST',
-					body: {
-						username,
-						password, // WARNING: In production, hash this with bcrypt!
-						name: name || username,
-						email,
-						avatar_url: avatarUrl,
-						is_admin: false
-					}
-				});
+                if (!user) {
+                    alert('❌ Invalid username or password');
+                    return;
+                }
 
-				console.log('✅ User registered:', result);
-				
-				// Log in the new user
-				await setCurrentUser(username);
-				closeAuth();
-				alert(`✅ Welcome ${name || username}! Registration successful!`);
-				
-			} catch (e) {
-				console.error('❌ Registration failed:', e);
-				
-				// Check if it's a unique constraint violation
-				if (e.message.includes('duplicate key') || e.message.includes('users_username_lower_idx')) {
-					alert('❌ This username already exists (case-insensitive). Please choose a different username.');
-				} else {
-					alert('❌ Registration failed: ' + e.message);
-				}
-			}
-		}
+                if (user.password !== password) {
+                    alert('❌ Invalid username or password');
+                    return;
+                }
+                
+                await setCurrentUser(user.username);
+                closeAuth();
+                
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPassword').value = '';
+                
+                alert(`✅ Welcome back, ${user.name || user.username}!`);
+                
+            } catch (e) {
+                console.error('Login failed:', e);
+                alert('❌ Login failed: ' + e.message);
+            }
+        }
 
-        // Login
-		async function doLogin() {
-			const username = document.getElementById('loginUsername').value.trim();
-			const password = document.getElementById('loginPassword').value;
-			
-			if (!username || !password) {
-				alert('❌ Please enter both username and password.');
-				return;
-			}
-			
-			try {
-				console.log('🔐 Attempting login for:', username);
-				
-				// Get all users and find case-insensitive match
-				const allUsers = await supaFetch('users', {
-					method: 'GET',
-					query: 'select=*'
-				});
-
-				// Find user with case-insensitive username match
-				const user = allUsers.find(
-					u => u.username.toLowerCase() === username.toLowerCase()
-				);
-
-				if (!user) {
-					console.warn('❌ User not found:', username);
-					alert('❌ Invalid username or password');
-					return;
-				}
-
-				if (user.password !== password) {
-					console.warn('❌ Invalid password for user:', username);
-					alert('❌ Invalid username or password');
-					return;
-				}
-
-				console.log('✅ Login successful for:', user.username);
-				
-				// Use the actual username from database (correct casing)
-				await setCurrentUser(user.username);
-				closeAuth();
-				
-				// Clear form
-				document.getElementById('loginUsername').value = '';
-				document.getElementById('loginPassword').value = '';
-				
-				alert(`✅ Welcome back, ${user.name || user.username}!`);
-				
-			} catch (e) {
-				console.error('❌ Login failed:', e);
-				alert('❌ Login failed: ' + e.message);
-			}
-		}
-
-        // Profile
         function openProfile() {
-            const cu = getCurrentUser(); if (!cu) { openAuth('login'); return; }
-            const u = findUser(cu.username);
-            document.getElementById('profName').value = u?.name || '';
-            document.getElementById('profEmail').value = u?.email || '';
+            const cu = getCurrentUser();
+            if (!cu) {
+                openAuth('login');
+                return;
+            }
+            document.getElementById('profName').value = cu.name || '';
+            document.getElementById('profEmail').value = cu.email || '';
             document.getElementById('profNewPassword').value = '';
             document.getElementById('profConfirmPassword').value = '';
-            const pPrev = document.getElementById('profAvatarPreview');
-            pPrev.src = u?.avatar || '';
-            document.getElementById('adminBadge').style.display = u?.isAdmin ? 'block' : 'none';
+            document.getElementById('profAvatarPreview').src = cu.avatar_url || '';
+            document.getElementById('adminBadge').style.display = cu.is_admin ? 'block' : 'none';
             profileModal.classList.add('active');
         }
-        function closeProfile() { profileModal.classList.remove('active'); }
+
+        function closeProfile() {
+            profileModal.classList.remove('active');
+        }
 
         const profAvatar = document.getElementById('profAvatar');
         profAvatar.addEventListener('change', e => {
-            const f = e.target.files[0]; if (!f) return;
+            const f = e.target.files[0];
+            if (!f) return;
             const r = new FileReader();
             r.onload = ev => document.getElementById('profAvatarPreview').src = ev.target.result;
             r.readAsDataURL(f);
         });
 
-        function saveProfile() {
-            const cu = getCurrentUser(); if (!cu) return;
-            const users = loadUsers();
-            const idx = users.findIndex(u => u.username.toLowerCase() === cu.username.toLowerCase());
-            if (idx === -1) return;
-            const name = document.getElementById('profName').value.trim();
-            const email = document.getElementById('profEmail').value.trim();
-            const newPass = document.getElementById('profNewPassword').value;
-            const confirm = document.getElementById('profConfirmPassword').value;
-            const avatar = document.getElementById('profAvatarPreview').src || users[idx].avatar;
-            users[idx].name = name || users[idx].username;
-            users[idx].email = email;
-            users[idx].avatar = avatar;
-            if (newPass || confirm) {
-                if (newPass !== confirm) { alert('Passwords do not match'); return; }
-                if (newPass.length < 4) { alert('Use a password with at least 4 characters'); return; }
-                users[idx].password = newPass;
+        async function saveProfile() {
+            const cu = getCurrentUser();
+            if (!cu) return;
+            
+            try {
+                const name = document.getElementById('profName').value.trim();
+                const email = document.getElementById('profEmail').value.trim();
+                const newPass = document.getElementById('profNewPassword').value;
+                const confirm = document.getElementById('profConfirmPassword').value;
+                
+                let avatarUrl = cu.avatar_url;
+                const avatarFile = document.getElementById('profAvatar').files[0];
+                if (avatarFile) {
+                    avatarUrl = await uploadRecipeImage(avatarFile);
+                }
+                
+                const updates = {
+                    name: name || cu.username,
+                    email: email,
+                    avatar_url: avatarUrl
+                };
+                
+                if (newPass || confirm) {
+                    if (newPass !== confirm) {
+                        alert('Passwords do not match');
+                        return;
+                    }
+                    if (newPass.length < 4) {
+                        alert('Use a password with at least 4 characters');
+                        return;
+                    }
+                    updates.password = newPass;
+                }
+                
+                await supaFetch('users', {
+                    method: 'PATCH',
+                    query: `username=eq.${encodeURIComponent(cu.username)}`,
+                    body: updates
+                });
+                
+                await setCurrentUser(cu.username);
+                
+                alert('✅ Profile updated successfully!');
+                closeProfile();
+                
+            } catch (e) {
+                console.error('Profile update failed:', e);
+                alert('❌ Failed to update profile: ' + e.message);
             }
-            saveUsers(users);
-            refreshHeaderUser();
-            closeProfile();
         }
 
         // Close modals on backdrop click
-        [authModal, profileModal, document.getElementById('addRecipeModal')].forEach(m => {
-            m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal')].forEach(m => {
+            m.addEventListener('click', e => {
+                if (e.target === m) m.classList.remove('active');
+            });
         });
-		// Initial load
-		(async function init() {
-			await initUser();
-			refreshHeaderUser();
-			renderPantry();
-			renderMealPlanner();
-			await refreshRecipesFromSupabase();
-		})();
+
+        // ===================== Initialize App =====================
+        
+        (async function init() {
+            await initUser();
+            refreshHeaderUser();
+            renderPantry();
+            renderMealPlanner();
+            await refreshRecipesFromSupabase();
+        })();
     </script>
 </body>
 </html>
