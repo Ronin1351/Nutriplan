@@ -3285,6 +3285,7 @@ function coalesceTime(total, prep, cook) {
             }
         }
 
+        async function refreshRecipesFromSupabase() {
 			const cu = getCurrentUser();
 			const isAdmin = cu?.is_admin || false;
 			
@@ -3339,7 +3340,6 @@ function coalesceTime(total, prep, cook) {
 				renderRecipes();
 			}
 		}
-
 
         // ===================== TheMealDB Integration =====================
         
@@ -3477,38 +3477,133 @@ function coalesceTime(total, prep, cook) {
 
         // ===================== Meal Planner =====================
         
-        function renderMealPlanner() {
-            const container = document.getElementById('mealPlanner');
-            const days = Object.keys(mealPlan);
-            container.innerHTML = days.map(day => {
-                const options = recipes.map(r => `<option value="${String(r.id)}">${r.name}</option>`).join('');
-                const slots = (mealPlan[day] || []).map((mealId, index) => {
-                    const rec = recipes.find(rr => String(rr.id) === String(mealId));
-                    return rec ? `<div class="meal-slot"><span>${rec.name}</span><button onclick="removeMealFromDay('${day}', ${index})" style="background:none;border:none;cursor:pointer;font-size:1.2em;">❌</button></div>` : '';
-                }).join('');
-                return `
-                    <div class="day-card">
-                        <h3>${day}</h3>
-                        <select onchange="addMealToDay('${day}', this.value)" style="width: 100%; margin-bottom: 10px;">
-                            <option value="">Add meal...</option>
-                            ${options}
-                        </select>
-                        <div id="${day}-meals">${slots}</div>
-                    </div>
-                `;
-            }).join('');
-        }
+		function renderMealPlanner() {
+			const container = document.getElementById('mealPlanner');
+			const days = Object.keys(mealPlan);
+			
+			// Group recipes by category for the dropdown
+			const recipesByCategory = {};
+			recipes.forEach(r => {
+				if (!recipesByCategory[r.category]) {
+					recipesByCategory[r.category] = [];
+				}
+				recipesByCategory[r.category].push(r);
+			});
+			
+			// Sort categories alphabetically
+			const sortedCategories = Object.keys(recipesByCategory).sort();
+			
+			container.innerHTML = days.map(day => {
+				// Build categorized options
+				const optionsHtml = sortedCategories.map(category => {
+					const categoryRecipes = recipesByCategory[category]
+						.map(r => `<option value="${String(r.id)}">${r.name}</option>`)
+						.join('');
+					return `<optgroup label="${category}">${categoryRecipes}</optgroup>`;
+				}).join('');
+				
+				// Build meal slots for this day
+				const slots = (mealPlan[day] || []).map((mealId, index) => {
+					const rec = recipes.find(rr => String(rr.id) === String(mealId));
+					if (!rec) return ''; // Skip if recipe not found
+					
+					return `
+						<div class="meal-slot">
+							<span style="cursor: pointer;" onclick="openRecipeModal('${rec.id}')" title="Click to view recipe">
+								${rec.name}
+							</span>
+							<button onclick="removeMealFromDay('${day}', ${index})" 
+									style="background:none;border:none;cursor:pointer;font-size:1.2em;color:var(--danger);"
+									title="Remove from ${day}">
+								❌
+							</button>
+						</div>
+					`;
+				}).join('');
+				
+				return `
+					<div class="day-card">
+						<h3>${day}</h3>
+						<select onchange="addMealToDay('${day}', this.value)" style="width: 100%; margin-bottom: 10px;">
+							<option value="">➕ Add meal...</option>
+							${optionsHtml}
+						</select>
+						<div id="${day}-meals">${slots}</div>
+					</div>
+				`;
+			}).join('');
+		}
 
-        function addToMealPlan(recipeId) {
-            const days = Object.keys(mealPlan);
-            const day = prompt('Add to which day? (' + days.join(', ') + ')');
-            if (day && mealPlan[day] !== undefined) {
-                mealPlan[day].push(String(recipeId));
-                renderMealPlanner();
-                closeRecipeModal();
-                alert('Added to ' + day + '!');
-            }
-        }
+// Global variable to track which recipe is being added
+let pendingRecipeForMealPlan = null;
+
+		function addToMealPlan(recipeId) {
+			// Store the recipe ID and open the day selector modal
+			pendingRecipeForMealPlan = recipeId;
+			
+			// Set the recipe name in the modal
+			const recipe = recipes.find(r => String(r.id) === String(recipeId));
+			if (recipe) {
+				document.getElementById('dayModalRecipeName').textContent = `Add "${recipe.name}" to Meal Plan`;
+			}
+			
+			// Clear all checkboxes
+			['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'all'].forEach(day => {
+				const checkbox = document.getElementById(`day-${day}`);
+				if (checkbox) checkbox.checked = false;
+			});
+			
+			// Open the modal
+			document.getElementById('daySelectorModal').classList.add('active');
+		}
+
+		function closeDaySelectorModal() {
+			document.getElementById('daySelectorModal').classList.remove('active');
+			pendingRecipeForMealPlan = null;
+		}
+
+		function toggleAllDays(checked) {
+			['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].forEach(day => {
+				const checkbox = document.getElementById(`day-${day}`);
+				if (checkbox) checkbox.checked = checked;
+			});
+		}
+
+		function confirmAddToMealPlan() {
+			if (!pendingRecipeForMealPlan) return;
+			
+			// Get selected days
+			const selectedDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].filter(day => {
+				const checkbox = document.getElementById(`day-${day}`);
+				return checkbox && checkbox.checked;
+			});
+			
+			if (selectedDays.length === 0) {
+				alert('Please select at least one day');
+				return;
+			}
+			
+			// Add recipe to selected days
+			selectedDays.forEach(day => {
+				if (mealPlan[day]) {
+					mealPlan[day].push(String(pendingRecipeForMealPlan));
+				}
+			});
+			
+			// Update UI
+			renderMealPlanner();
+			closeDaySelectorModal();
+			
+			// Close recipe modal if open
+			const recipeModal = document.getElementById('recipeDetailsModal');
+			if (recipeModal.classList.contains('active')) {
+				closeRecipeModal();
+			}
+			
+			// Show success message
+			const dayText = selectedDays.length === 1 ? selectedDays[0] : `${selectedDays.length} days`;
+			alert(`✅ Recipe added to ${dayText}!`);
+		}
 
         function addMealToDay(day, recipeId) {
             if (!recipeId) return;
@@ -3836,7 +3931,7 @@ function coalesceTime(total, prep, cook) {
         }
 
         // Close modals on backdrop click
-        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal'), document.getElementById('bookmarkletModal')].forEach(m => {
+        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal'), document.getElementById('bookmarkletModal'), document.getElementById('daySelectorModal')].forEach(m => {
 			if (!m) return;
 			m.addEventListener('click', e => {
 			if (e.target === m) m.classList.remove('active');
@@ -3853,5 +3948,65 @@ function coalesceTime(total, prep, cook) {
             await refreshRecipesFromSupabase();
         })();
     </script>
+	<!-- Day Selector Modal for Meal Planning -->
+    <div class="modal" id="daySelectorModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2 id="dayModalRecipeName" style="margin-bottom: 15px;">Add to Meal Plan</h2>
+            <p class="muted" style="margin-bottom: 20px;">Select which days you want to add this recipe:</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Monday" value="Monday">
+                    <span style="font-weight: 500;">📅 Monday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Tuesday" value="Tuesday">
+                    <span style="font-weight: 500;">📅 Tuesday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Wednesday" value="Wednesday">
+                    <span style="font-weight: 500;">📅 Wednesday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Thursday" value="Thursday">
+                    <span style="font-weight: 500;">📅 Thursday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Friday" value="Friday">
+                    <span style="font-weight: 500;">📅 Friday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Saturday" value="Saturday">
+                    <span style="font-weight: 500;">📅 Saturday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-Sunday" value="Sunday">
+                    <span style="font-weight: 500;">📅 Sunday</span>
+                </label>
+                <label class="checkbox-wrapper" style="background: var(--accent); color: white; padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.2s;">
+                    <input type="checkbox" id="day-all" onchange="toggleAllDays(this.checked)">
+                    <span style="font-weight: 600;">✨ All Week</span>
+                </label>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeDaySelectorModal()">Cancel</button>
+                <button class="btn" onclick="confirmAddToMealPlan()">Add to Selected Days</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* Make checkboxes look better */
+        .checkbox-wrapper:has(input:checked) {
+            border-color: var(--accent) !important;
+            background: var(--accent) !important;
+            color: white !important;
+        }
+        .checkbox-wrapper:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+    </style>
 </body>
 </html>
