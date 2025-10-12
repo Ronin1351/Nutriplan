@@ -1127,76 +1127,68 @@ function extractFromMicrodata(doc) {
 // ===================== NORMALIZATION =====================
 
 // normalizeRecipe(raw, sourceUrl)
-function normalizeRecipe(raw, sourceUrl) {
-    const cu = getCurrentUser();
-    
-    // Parse time (ISO duration or plain number)
-    const parseTime = (time) => {
-        if (!time) return 0;
-        if (typeof time === 'number') return Math.round(time);
-        
-        // Handle ISO 8601 durations like PT30M, PT1H30M
-        const match = time.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-        if (match) {
-            const hours = parseInt(match[1] || 0);
-            const mins = parseInt(match[2] || 0);
-            return hours * 60 + mins;
-        }
-        
-        return 0;
-    };
-    
-    const prepTime = parseTime(raw.prepTime);
-    const cookTime = parseTime(raw.cookTime);
-    const totalTime = parseTime(raw.totalTime);
-    const prep_time = totalTime || prepTime + cookTime || prepTime || 30;
-    
-    // Parse ingredients
-    const ingredients = (raw.recipeIngredient || []).map(line => {
-        return parseIngredientLine(line.trim());
-    }).filter(ing => ing.item);
-    
-    // Parse servings
-    const servings = (() => {
-        const yieldStr = String(raw.recipeYield || '4');
-        const match = yieldStr.match(/(\d+)/);
-        return match ? parseInt(match[1]) : 4;
-    })();
-    
-    // Category
-    const category = raw.recipeCuisine || 'Miscellaneous';
-    
-    // Image
-    let image_url = '';
-    if (raw.image) {
-        if (typeof raw.image === 'string') {
-            image_url = raw.image;
-        } else if (raw.image.url) {
-            image_url = raw.image.url;
-        }
-    }
-    
-    // Make absolute URL
-    if (image_url && !/^https?:\/\//i.test(image_url)) {
-        try {
-            image_url = new URL(image_url, sourceUrl).toString();
-        } catch (e) {
-            image_url = '';
-        }
-    }
-    
-    return {
-        name: raw.name.trim(),
-        category,
-        servings,
-        prep_time,
-        ingredients,
-        instructions: raw.recipeInstructions || '',
-        image_url,
-        submitted_by: cu ? (cu.name || cu.username) : 'anonymous',
-        approved: false
-    };
-}
+		function normalizeRecipe(raw, sourceUrl) {
+		  const cu = getCurrentUser();
+
+		  // time parsing (unchanged)
+		  const parseTime = (time) => {
+			if (!time) return 0;
+			if (typeof time === 'number') return Math.round(time);
+			const m = String(time).match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+			if (m) return (parseInt(m[1]||0)*60) + (parseInt(m[2]||0));
+			const mm = String(time).match(/(\d+)\s*min/i);
+			if (mm) return parseInt(mm[1]);
+			return 0;
+		  };
+
+		  const name =
+			(raw.name || raw.headline || raw.title || '').toString().trim();
+
+		  const servings = (() => {
+			if (raw.recipeYield == null) return 4;
+			const s = String(raw.recipeYield);
+			const m = s.match(/(\d+)/);
+			return m ? parseInt(m[1]) : 4;
+		  })();
+
+		  // NAME-ONLY category
+		  const category = validateCategory(classifyCategoryFromName(name));
+
+		  // image
+		  let image_url = '';
+		  if (raw.image) {
+			if (typeof raw.image === 'string') image_url = raw.image;
+			else if (raw.image.url) image_url = raw.image.url;
+			else if (Array.isArray(raw.image) && raw.image.length)
+			  image_url = typeof raw.image[0] === 'string' ? raw.image[0] : raw.image[0].url || '';
+		  }
+
+		  // ingredients (keep your existing parser)
+		  const ingredients = Array.isArray(raw.recipeIngredient)
+			? raw.recipeIngredient.map(parseIngredientLine).filter(Boolean)
+			: [];
+
+		  // instructions → plain text
+		  const instructions = stripHtmlToText(
+			Array.isArray(raw.recipeInstructions)
+			  ? raw.recipeInstructions.map(extractInstructions).join('\n')
+			  : extractInstructions(raw.recipeInstructions || '')
+		  );
+
+		  return {
+			name,
+			category,
+			servings,
+			prep_time: parseTime(raw.totalTime || raw.prepTime),
+			ingredients,
+			instructions,
+			image_url,
+			submitted_by: cu?.username || cu?.email || 'Anonymous',
+			approved: false,
+			source_url: sourceUrl || ''
+		  };
+		}
+
 // parseIngredientLine(line)
 function parseIngredientLine(line) {
     // Simple parser: "2 cups flour" -> {amount: 2, unit: 'cup', item: 'flour'}
@@ -2320,8 +2312,7 @@ function collectCandidateImages(doc, baseUrl) {
   // Return unique list
   return Array.from(out);
 }
-// guessCategoryFromTags(tags)
-// guessCategory(ingredients, tags, recipeCuisine)
+
 // guessCategory(ingredients, tags, recipeCuisine)
 function guessCategory(ingredients, tags, recipeCuisine) {
   // Smart category detection prioritizing main protein ingredient
@@ -2419,28 +2410,64 @@ function guessCategory(ingredients, tags, recipeCuisine) {
   return 'Miscellaneous';
 }
 
-// validateCategory(category) - Ensures only valid categories are used
-function validateCategory(category) {
-  const VALID_CATEGORIES = [
-    'Beef', 'Breakfast', 'Chicken', 'Dessert', 'Goat', 'Lamb', 
-    'Miscellaneous', 'Pasta', 'Pork', 'Seafood', 'Side', 
-    'Starter', 'Vegan', 'Vegetarian'
-  ];
-  
-  if (!category || typeof category !== 'string') return 'Miscellaneous';
-  
-  // Check if it's already valid
-  if (VALID_CATEGORIES.includes(category)) return category;
-  
-  // Try case-insensitive match
-  const normalized = category.trim();
-  const match = VALID_CATEGORIES.find(c => c.toLowerCase() === normalized.toLowerCase());
-  if (match) return match;
-  
-  // Invalid category - return Miscellaneous
-  console.warn(`Invalid category "${category}" - using Miscellaneous`);
-  return 'Miscellaneous';
-}
+		// validateCategory(category) - Ensures only valid categories are used
+		function validateCategory(category) {
+		  const VALID_CATEGORIES = [
+			'Beef', 'Breakfast', 'Chicken', 'Dessert', 'Goat', 'Lamb', 
+			'Miscellaneous', 'Pasta', 'Pork', 'Seafood', 'Side', 
+			'Starter', 'Vegan', 'Vegetarian'
+		  ];
+		  
+		  if (!category || typeof category !== 'string') return 'Miscellaneous';
+		  
+		  // Check if it's already valid
+		  if (VALID_CATEGORIES.includes(category)) return category;
+		  
+		  // Try case-insensitive match
+		  const normalized = category.trim();
+		  const match = VALID_CATEGORIES.find(c => c.toLowerCase() === normalized.toLowerCase());
+		  if (match) return match;
+		  
+		  // Invalid category - return Miscellaneous
+		  console.warn(`Invalid category "${category}" - using Miscellaneous`);
+		  return 'Miscellaneous';
+		}
+		
+		// ---- NAME-ONLY CATEGORY CLASSIFIER ----
+		// Input: recipe name (string). Output: one of your VALID_CATEGORIES.
+		function classifyCategoryFromName(name) {
+		  const VALID_CATEGORIES = [
+			'Beef','Breakfast','Chicken','Dessert','Goat','Lamb',
+			'Miscellaneous','Pasta','Pork','Seafood','Side','Starter',
+			'Vegan','Vegetarian'
+		  ];
+		  if (!name || typeof name !== 'string') return 'Miscellaneous';
+
+		  const n = name.toLowerCase();
+
+		  // protein-led buckets
+		  if (/\b(beef|steak|brisket|sirloin|ribeye|oxtail|meatloaf|burger|hamburger)\b/.test(n)) return 'Beef';
+		  if (/\b(chicken|poultry|drumstick|thigh|breast|wing|rooster|hen)\b/.test(n)) return 'Chicken';
+		  if (/\b(pork|bacon|ham|prosciutto|pancetta|chorizo|ribs?)\b/.test(n)) return 'Pork';
+		  if (/\b(lamb|mutton)\b/.test(n)) return 'Lamb';
+		  if (/\b(goat)\b/.test(n)) return 'Goat';
+		  if (/\b(tuna|salmon|shrimp|prawn|fish|cod|tilapia|mackerel|sardine|crab|clam|mussel|oyster)\b/.test(n)) return 'Seafood';
+
+		  // vegan/vegetarian by explicit naming
+		  if (/\b(vegan)\b/.test(n)) return 'Vegan';
+		  if (/\b(vegetarian|meatless)\b/.test(n)) return 'Vegetarian';
+
+		  // dish styles
+		  if (/\b(pasta|spaghetti|fettuccine|penne|lasagna|mac( and)? cheese)\b/.test(n)) return 'Pasta';
+		  if (/\b(pancake|waffle|omelet|omelette|scramble|breakfast|oatmeal|granola|french toast)\b/.test(n)) return 'Breakfast';
+		  if (/\b(dessert|cake|brownie|cookie|pudding|custard|pie|tart|cheesecake|ice cream)\b/.test(n)) return 'Dessert';
+		  if (/\b(starter|appetizer|bruschetta|canap[eé]|dip|crudités)\b/.test(n)) return 'Starter';
+		  if (/\b(side|coleslaw|mashed potatoes|side salad)\b/.test(n)) return 'Side';
+
+		  return 'Miscellaneous';
+		}
+
+		
 // stripHtmlToText(html)
 function stripHtmlToText(html) {
   // Converts arbitrary HTML (instructions/steps) to clean plaintext with newlines.
@@ -2608,28 +2635,28 @@ function coalesceTime(total, prep, cook) {
         let mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
         let editingRecipeId = null;
 		function rowToRecipe(r) {
-		    // Re-guess category from ingredients to fix any invalid stored categories
-		    const ingredients = Array.isArray(r.ingredients) ? r.ingredients : [];
-		    const fixedCategory = validateCategory(
-		        guessCategory(ingredients, [], r.category)
-		    );
-		    
-		    return {
-		        id: r.id,
-		        name: r.name,
-		        category: fixedCategory, // Use corrected category
-		        servings: r.servings || 4,
-		        prepTime: r.prep_time || 30,
-		        isFavorite: false,
-		        image: r.image_url || null,
-		        ingredients: ingredients,
-		        instructions: r.instructions || '',
-		        submittedBy: r.submitted_by || 'Unknown',
-		        approved: !!r.approved,
-		        averageRating: r.average_rating || 0,
-		        ratingCount: r.rating_count || 0
-		    };
+		  // Use DB category if present; otherwise derive from NAME ONLY
+		  const safeCategory = r.category
+			? validateCategory(r.category)
+			: validateCategory(classifyCategoryFromName(r.name || ''));
+
+		  return {
+			id: r.id,
+			name: r.name,
+			category: safeCategory,
+			servings: r.servings || 4,
+			prepTime: r.prep_time || 30,
+			isFavorite: false,
+			image: r.image_url || null,
+			ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+			instructions: r.instructions || '',
+			submitted_by: r.submitted_by || '',
+			approved: !!r.approved,
+			average_rating: r.average_rating ?? 0,
+			rating_count: r.rating_count ?? 0,
+		  };
 		}
+
         // ===================== RATING SYSTEM (NEW!) =====================
         
         async function rateRecipe(recipeId, rating) {
@@ -3102,96 +3129,96 @@ function coalesceTime(total, prep, cook) {
             }
         }
 
-        async function saveRecipe() {
-            try {
-                const cu = getCurrentUser();
-                if (!cu) {
-                    alert('❌ Please log in to save recipes');
-                    return;
-                }
+		async function saveRecipe() {
+		  try {
+			const cu = getCurrentUser();
+			if (!cu) {
+			  alert('❌ Please log in to save recipes');
+			  return;
+			}
 
-                const name = document.getElementById('newRecipeName').value.trim();
-                const category = document.getElementById('newRecipeCategory').value || 'Miscellaneous';
-                const servings = parseInt(document.getElementById('newRecipeServings').value) || 4;
-                const prepTime = parseInt(document.getElementById('newRecipePrepTime').value) || 30;
-                const ingredientsText = document.getElementById('newRecipeIngredients').value || '';
-                const instructions = document.getElementById('newRecipeInstructions').value || '';
-                const imageUrlTyped = document.getElementById('newRecipeImageUrl').value.trim();
-                const fileInput = document.getElementById('recipePhoto');
+			const name = document.getElementById('newRecipeName').value.trim();
+			const dropdownCat = document.getElementById('newRecipeCategory').value;
+			const servings = parseInt(document.getElementById('newRecipeServings').value) || 4;
+			const prepTime = parseInt(document.getElementById('newRecipePrepTime').value) || 30;
+			const ingredientsText = document.getElementById('newRecipeIngredients').value || '';
+			const instructions = document.getElementById('newRecipeInstructions').value || '';
+			const imageUrlTyped = document.getElementById('newRecipeImageUrl').value.trim();
+			const fileInput = document.getElementById('recipePhoto');
 
-                if (!name || !ingredientsText) {
-                    alert('Please fill in name and ingredients');
-                    return;
-                }
+			if (!name) {
+			  alert('Recipe name is required');
+			  return;
+			}
 
-                const ingredients = ingredientsText.split('\n')
-                    .filter(line => line.trim().length)
-                    .map(line => {
-                        const parts = line.trim().split(/\s+/);
-                        const amount = parseFloat((parts[0] || '0').replace(/[^\d.]/g, '')) || 1;
-                        const unit = (parts[1] || '').toLowerCase();
-                        const item = parts.slice(2).join(' ') || parts.slice(1).join(' ');
-                        return { item, amount, unit };
-                    });
+			// Build ingredients array from textarea
+			const ingredients = ingredientsText
+			  .split('\n')
+			  .map(s => s.trim())
+			  .filter(Boolean)
+			  .map(parseIngredientLine)
+			  .filter(Boolean);
 
-                let image_url = imageUrlTyped;
-                if (fileInput && fileInput.files && fileInput.files[0]) {
-                    image_url = await uploadRecipeImage(fileInput.files[0]);
-                }
+			// Resolve image: file upload > typed URL > none
+			let image_url = '';
+			if (fileInput?.files?.[0]) {
+			  image_url = await uploadRecipeImage(fileInput.files[0]);
+			} else if (imageUrlTyped) {
+			  image_url = imageUrlTyped;
+			}
 
-                const submitted_by = cu.name || cu.username;
+			// Category rule: respect dropdown if user chose one; else classify by NAME only
+			const finalCategory = validateCategory(
+			  dropdownCat || classifyCategoryFromName(name)
+			);
 
-                const row = {
-                    name,
-                    category,
-                    servings,
-                    prep_time: prepTime,
-                    ingredients,
-                    instructions,
-                    image_url,
-                    submitted_by,
-                    approved: false
-                };
+			// Prepare row for DB
+			const row = {
+			  name,
+			  category: finalCategory,
+			  servings,
+			  prep_time: prepTime,
+			  ingredients,
+			  instructions,
+			  image_url,
+			  submitted_by: cu?.username || cu?.email || 'Anonymous'
+			  // NOTE: do NOT include `approved` here — only admin flow sets it
+			};
 
-                let recipeId;
-                if (editingRecipeId) {
-                    await supaFetch('recipes', {
-                        method: 'PATCH',
-                        query: `id=eq.${encodeURIComponent(editingRecipeId)}`,
-                        body: row
-                    });
-                    recipeId = editingRecipeId;
-                    alert('Recipe updated!');
-                } else {
-                    const result = await supaFetch('recipes', {
-                        method: 'POST',
-                        body: row
-                    });
-                    recipeId = Array.isArray(result) ? result[0].id : result.id;
-                    alert(`"${name}" has been added!`);
-                }
+			let recipeId;
+			if (editingRecipeId) {
+			  // EDIT path — do NOT send `approved:false`
+			  await supaFetch('recipes', {
+				method: 'PATCH',
+				query: `id=eq.${encodeURIComponent(editingRecipeId)}`,
+				body: row
+			  });
+			  recipeId = editingRecipeId;
+			  alert('Recipe updated!');
+			} else {
+			  // CREATE path
+			  const result = await supaFetch('recipes', { method: 'POST', body: { ...row, approved: false } });
+			  recipeId = Array.isArray(result) ? result[0].id : result.id;
+			  alert(`"${name}" has been added!`);
+			}
 
-                // ADD TO USER'S COLLECTION
-                try {
-                    await supaFetch('user_recipes', {
-                        method: 'POST',
-                        body: {
-                            user_id: cu.id,
-                            recipe_id: recipeId
-                        }
-                    });
-                } catch (e) {
-                    console.log('Recipe already in collection or error:', e);
-                }
+			// Ensure it is in the user's collection (best effort)
+			try {
+			  await supaFetch('user_recipes', {
+				method: 'POST',
+				body: { user_id: cu.id, recipe_id: recipeId }
+			  });
+			} catch {}
 
-                await refreshRecipesFromSupabase();
-                closeAddRecipeModal();
-                clearRecipeForm();
-            } catch (e) {
-                console.error(e);
-                alert('Failed to save: ' + (e.message || e));
-            }
-        }
+			await refreshRecipesFromSupabase();
+			closeAddRecipeModal();
+			clearRecipeForm();
+		  } catch (e) {
+			console.error(e);
+			alert('Failed to save: ' + (e.message || e));
+		  }
+		}
+
 
         async function approveRecipe(id) {
             try {
