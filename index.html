@@ -275,7 +275,8 @@
                     <label for="favoritesOnly">Show Favorites Only</label>
                 </div>
                 <button class="btn" onclick="guardedShowAddRecipeModal()">+ Add Recipe</button>
-				<button class="btn" onclick="openImportModal()">📥 Import from URL</button> <!-- ⭐ ADD THIS LINE -->
+				<button class="btn" onclick="openImportModal()">📥 Import from URL</button>
+				<button class="btn btn-secondary" onclick="showBookmarkletInfo()">🔖 Get Bookmarklet</button>
                 <small class="small">Select a category to browse online recipes (TheMealDB). Saved items go to Supabase.</small>
             </div>
             <div id="apiRecipesContainer"></div>
@@ -503,7 +504,41 @@
             <div id="rdmBody"></div>
         </div>
     </div>
-
+<!-- Bookmarklet Modal -->
+    <div class="modal" id="bookmarkletModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2>🔖 Recipe Bookmarklet</h2>
+            <p class="muted">The easiest way to import recipes from ANY website!</p>
+            
+            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">Step 1: Drag this to your bookmarks bar ⬇️</h3>
+                <a href="javascript:(function(){try{const e=document.querySelectorAll('script[type=%22application/ld+json%22]');let t=null;for(const r of e){try{const e=JSON.parse(r.textContent),n=(e=>Array.isArray(e)?e.find((e=>((e,t)=>{const r=e?.['@type'];return r&&('Recipe'===r||Array.isArray(r)&&r.includes('Recipe'))})(e)))||(e=>Array.isArray(e)?e.find((t=>e(t))):null)(e):e&&'object'==typeof e?((e,t)=>{const r=e?.['@type'];return r&&('Recipe'===r||Array.isArray(r)&&r.includes('Recipe'))})(e)?e:e['@graph']?(e=>Array.isArray(e)?e.find((e=>((e,t)=>{const r=e?.['@type'];return r&&('Recipe'===r||Array.isArray(r)&&r.includes('Recipe'))})(e)))||(e=>Array.isArray(e)?e.find((t=>e(t))):null)(e):null)(e['@graph']):null:null)(e);if(n){t=n;break}}catch(e){}}if(t||((()=>{const e=document.querySelector('[itemscope][itemtype*=%22schema.org/Recipe%22]');if(!e)return null;const t=t=>e.querySelector(`[itemprop=%22${t}%22]`)?.textContent?.trim()||'';return{name:t('name'),image:t('image'),recipeIngredient:Array.from(e.querySelectorAll('[itemprop=%22recipeIngredient%22]')).map((e=>e.textContent.trim())),recipeInstructions:Array.from(e.querySelectorAll('[itemprop=%22recipeInstructions%22]')).map((e=>e.textContent.trim())).join('\n'),recipeYield:t('recipeYield'),prepTime:t('prepTime'),cookTime:t('cookTime')}})()||(t={name:document.title,image:document.querySelector('meta[property=%22og:image%22]')?.getAttribute('content')||'',recipeIngredient:Array.from(document.querySelectorAll('li')).filter((e=>/\d/.test(e.textContent))).slice(0,15).map((e=>e.textContent.trim())),recipeInstructions:''})),!t?.name)return void alert('❌ No recipe found on this page. Try a different recipe website.');localStorage.setItem('nutriplan_import_recipe',JSON.stringify({recipe:t,sourceUrl:window.location.href,timestamp:Date.now()})),window.open(window.location.origin+window.location.pathname+'?import=bookmarklet','_blank')||alert('✅ Recipe saved! Go back to Nutriplan and click %22Import from URL%22 → %22Load Saved Recipe%22')}catch(e){console.error(e),alert('❌ Error: '+e.message)}})();" 
+                   class="btn" 
+                   style="display: inline-block; text-decoration: none; cursor: move; font-size: 1.1em; padding: 12px 24px;"
+                   onclick="alert('⬆️ Drag this button to your bookmarks bar!\n\nDon\'t click it - DRAG it up to your bookmarks!'); return false;">
+                    🔖 Save to Nutriplan
+                </a>
+                <p class="small" style="margin-top: 10px; color: var(--text-secondary);">
+                    <strong>Important:</strong> Don't click it - DRAG it to your bookmarks bar at the top of your browser!
+                </p>
+            </div>
+            
+            <div style="background: var(--bg-secondary); padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">Step 2: How to use it</h3>
+                <ol style="line-height: 1.8;">
+                    <li>Visit any recipe website (AllRecipes, Food Network, etc.)</li>
+                    <li>Click the <strong>"🔖 Save to Nutriplan"</strong> bookmark you just added</li>
+                    <li>The recipe will be extracted automatically</li>
+                    <li>Come back here and click "Load Saved Recipe" button</li>
+                </ol>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeBookmarkletModal()">Close</button>
+                <button class="btn" onclick="closeBookmarkletModal(); openImportModal();">Open Import Tool</button>
+            </div>
+        </div>
+    </div>
     <input type="file" id="hiddenRecipeImageInput" accept="image/*" style="display:none">
 
     <script>
@@ -561,7 +596,84 @@
         // ===================== User Management =====================
         const CURRENT_USER_KEY = 'nutriplan.currentUser';
         let currentUser = null;
-// openImportModal()
+		// ===================== BOOKMARKLET SUPPORT =====================
+
+function showBookmarkletInfo() {
+    document.getElementById('bookmarkletModal').classList.add('active');
+}
+
+function closeBookmarkletModal() {
+    document.getElementById('bookmarkletModal').classList.remove('active');
+}
+
+function loadSavedRecipe() {
+    try {
+        const saved = localStorage.getItem('nutriplan_import_recipe');
+        if (!saved) {
+            alert('❌ No saved recipe found.\n\n1. Make sure you used the bookmarklet on a recipe page\n2. Then come back here and click this button');
+            return;
+        }
+        
+        const data = JSON.parse(saved);
+        const recipe = data.recipe;
+        
+        if (!recipe || !recipe.name) {
+            alert('❌ Saved recipe data is invalid');
+            localStorage.removeItem('nutriplan_import_recipe');
+            return;
+        }
+        
+        // Fill the import modal with the saved recipe
+        const modal = document.getElementById('import-modal');
+        if (!modal) {
+            alert('❌ Import modal not found');
+            return;
+        }
+        
+        // Switch to paste mode and fill with JSON
+        const modePasteBtn = modal.querySelector('#mode-paste-btn');
+        if (modePasteBtn) modePasteBtn.click();
+        
+        const pasteText = modal.querySelector('#import-paste-text');
+        const baseUrlInput = modal.querySelector('#import-baseurl-input');
+        
+        if (pasteText) {
+            // Store as JSON-LD for easy parsing
+            pasteText.value = JSON.stringify(recipe, null, 2);
+        }
+        if (baseUrlInput && data.sourceUrl) {
+            baseUrlInput.value = data.sourceUrl;
+        }
+        
+        // Clear the saved data
+        localStorage.removeItem('nutriplan_import_recipe');
+        
+        // Auto-click parse button
+        setTimeout(() => {
+            const parseBtn = modal.querySelector('#import-parse-btn');
+            if (parseBtn && !parseBtn.disabled) {
+                parseBtn.click();
+            }
+        }, 100);
+        
+        alert('✅ Recipe loaded! Review and click "Save Recipe"');
+        
+    } catch (e) {
+        console.error('Load saved recipe failed:', e);
+        alert('❌ Error loading recipe: ' + e.message);
+    }
+}
+
+// Check if user came from bookmarklet
+window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('import') === 'bookmarklet') {
+        setTimeout(() => {
+            openImportModal();
+            setTimeout(() => loadSavedRecipe(), 500);
+        }, 1000);
+    }
+});
 function openImportModal() {
   let modal = document.getElementById('import-modal');
   if (!modal) {
@@ -571,18 +683,39 @@ function openImportModal() {
 
     modal.innerHTML = `
       <div class="modal-content">
-        <h2>📥 Import Recipe from URL</h2>
-        <p class="small">Paste a recipe URL from any cooking website</p>
+        <h2>📥 Import Recipe</h2>
+        <p class="small">Import from a URL or paste page HTML / JSON-LD</p>
 
-        <div class="form-group">
-          <label>Recipe URL</label>
-          <input type="url" id="import-url-input" placeholder="https://example.com/recipe">
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <button class="btn btn-secondary" id="mode-url-btn" data-active="1">From URL</button>
+          <button class="btn btn-secondary" id="mode-paste-btn">Paste HTML / JSON-LD</button>
         </div>
 
-        <div class="form-group">
-          <button class="btn" id="import-parse-btn" disabled>Parse Recipe</button>
-          <span id="import-status" class="small" style="margin-left:10px;"></span>
+        <!-- URL mode -->
+        <div id="mode-url" style="display:block;">
+          <div class="form-group">
+            <label>Recipe URL</label>
+            <input type="url" id="import-url-input" placeholder="https://example.com/recipe">
+          </div>
         </div>
+
+        <!-- Paste mode -->
+        <div id="mode-paste" style="display:none;">
+          <div class="form-group">
+            <label>Page HTML or JSON-LD</label>
+            <textarea id="import-paste-text" rows="8" placeholder="<html>... or { \\"@type\\": \\"Recipe\\" }"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Base URL (optional, used to resolve relative images/links)</label>
+            <input type="url" id="import-baseurl-input" placeholder="https://example.com/recipe">
+          </div>
+        </div>
+
+        <div class="form-group" style="display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
+		  <button class="btn" id="import-parse-btn" disabled>Parse Recipe</button>
+		  <button class="btn btn-secondary" id="load-saved-btn" onclick="loadSavedRecipe()">📥 Load Saved Recipe</button>
+		  <span id="import-status" class="small" style="margin-left:4px;"></span>
+		</div>
 
         <div id="import-preview" style="display:none; margin:20px 0; padding:15px; background:var(--bg-secondary); border-radius:8px;">
           <!-- Preview will be inserted here -->
@@ -597,24 +730,131 @@ function openImportModal() {
 
     document.body.appendChild(modal);
 
-    // Wire up event handlers
-    const urlInput = modal.querySelector('#import-url-input');
+    // Elements
+    const modeUrlBtn   = modal.querySelector('#mode-url-btn');
+    const modePasteBtn = modal.querySelector('#mode-paste-btn');
+    const urlMode      = modal.querySelector('#mode-url');
+    const pasteMode    = modal.querySelector('#mode-paste');
+
+    const urlInput     = modal.querySelector('#import-url-input');
+    const pasteText    = modal.querySelector('#import-paste-text');
+    const baseUrlInput = modal.querySelector('#import-baseurl-input');
+
     const parseBtn = modal.querySelector('#import-parse-btn');
     const saveBtn  = modal.querySelector('#import-save-btn');
     const statusEl = modal.querySelector('#import-status');
     const preview  = modal.querySelector('#import-preview');
+    statusEl?.setAttribute?.('aria-live', 'polite');
 
-    // Enable parse button when valid URL entered
-    urlInput.addEventListener('input', () => {
-      const isValid = urlInput.value.trim() && /^https?:\/\/.+/.test(urlInput.value.trim());
-      parseBtn.disabled = !isValid;
-    });
+    // Mode switching
+    const setMode = (mode) => {
+      if (mode === 'url') {
+        urlMode.style.display = 'block';
+        pasteMode.style.display = 'none';
+        modeUrlBtn.setAttribute('data-active', '1');
+        modePasteBtn.removeAttribute('data-active');
+      } else {
+        urlMode.style.display = 'none';
+        pasteMode.style.display = 'block';
+        modePasteBtn.setAttribute('data-active', '1');
+        modeUrlBtn.removeAttribute('data-active');
+      }
+      statusEl.textContent = '';
+      preview.style.display = 'none';
+      saveBtn.style.display = 'none';
+      saveBtn.disabled = true;
+      updateParseEnabled();
+    };
 
-    // Parse button click
+    modeUrlBtn.addEventListener('click', () => setMode('url'));
+    modePasteBtn.addEventListener('click', () => setMode('paste'));
+
+    // Helpers
+    const isValidHttpUrl = (s) => {
+      try { const u = new URL(String(s)); return /^https?:$/.test(u.protocol); } catch { return false; }
+    };
+    const updateParseEnabled = () => {
+      const urlModeActive = !!modeUrlBtn.getAttribute('data-active');
+      if (urlModeActive) {
+        parseBtn.disabled = !isValidHttpUrl(urlInput.value.trim());
+      } else {
+        const hasText = !!pasteText.value.trim();
+        parseBtn.disabled = !hasText; // base URL optional
+      }
+    };
+
+    urlInput.addEventListener('input', updateParseEnabled);
+    pasteText.addEventListener('input', updateParseEnabled);
+    baseUrlInput.addEventListener('input', () => {}); // optional
+
+    // Prevent concurrent parses
+    let parsing = false;
+
+    // Build draft from pasted HTML/JSON-LD using existing extractors
+    const buildDraftFromPaste = async (rawText, baseHref) => {
+      const htmlCandidate = rawText.trim();
+
+      // If user pasted JSON-LD only, wrap into minimal HTML for parser
+      const asHtml = htmlCandidate.startsWith('{') || htmlCandidate.startsWith('[')
+        ? `<html><head><script type="application/ld+json">${htmlCandidate}</script${''}>${baseHref ? `<base href="${baseHref}">` : ''}</head><body></body></html>`
+        : htmlCandidate;
+
+      const _htmlToDocument = (typeof htmlToDocument === 'function')
+        ? htmlToDocument
+        : (html, base) => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            if (base && !doc.querySelector('base')) {
+              const b = doc.createElement('base'); b.setAttribute('href', base);
+              doc.head && doc.head.insertBefore(b, doc.head.firstChild || null);
+            }
+            return doc;
+          };
+
+      const doc = _htmlToDocument(asHtml, baseHref || '');
+      const _extractRawRecipe = (typeof extractRawRecipe === 'function')
+        ? extractRawRecipe
+        : (d) => {
+            if (typeof extractFromJsonLd === 'function') {
+              const r = extractFromJsonLd(d); if (r) return r;
+            }
+            if (typeof extractFromMicrodata === 'function') {
+              const r = extractFromMicrodata(d); if (r) return r;
+            }
+            if (typeof extractWithSelectors === 'function') {
+              const r = extractWithSelectors(d); if (r) return r;
+            }
+            return null;
+          };
+
+      const raw = _extractRawRecipe(doc);
+      if (!raw) throw new Error('No recipe found in the provided text');
+
+      const _normalize = (typeof normalizeRecipe === 'function') ? normalizeRecipe : null;
+      if (!_normalize) throw new Error('normalizeRecipe(raw, sourceUrl) is not implemented');
+
+      const draft = _normalize(raw, baseHref || '');
+      draft.source_url = baseHref || '';
+      if (!draft.name) draft.name = doc.title?.trim() || 'Imported Recipe';
+      if (!Number.isFinite(draft.prep_time)) draft.prep_time = 0;
+      if (!Array.isArray(draft.ingredients)) draft.ingredients = [];
+      if (typeof draft.instructions !== 'string') draft.instructions = '';
+      return draft;
+    };
+
+    // Parse button click (URL or Paste)
     parseBtn.addEventListener('click', async () => {
-      const url = urlInput.value.trim();
-      if (!url) return;
+      if (parsing) return;
 
+      const urlModeActive = !!modeUrlBtn.getAttribute('data-active');
+      const url = urlInput.value.trim();
+      const pasted = pasteText.value.trim();
+      const baseHref = baseUrlInput.value.trim();
+
+      if (urlModeActive && !isValidHttpUrl(url)) return;
+      if (!urlModeActive && !pasted) return;
+
+      parsing = true;
       statusEl.textContent = '🔍 Parsing recipe...';
       statusEl.style.color = '';
       parseBtn.disabled = true;
@@ -623,9 +863,11 @@ function openImportModal() {
       saveBtn.disabled = true;
 
       try {
-        const draft = await importFromUrl(url);
+        const draft = urlModeActive
+          ? await importFromUrl(url)
+          : await buildDraftFromPaste(pasted, isValidHttpUrl(baseHref) ? baseHref : '');
 
-        // Show preview (enhanced)
+        // Render preview
         preview.innerHTML = `
           <div style="border: 1px solid var(--border); border-radius: 8px; padding: 15px;">
             <h3 style="margin: 0 0 10px 0;">${draft.name}</h3>
@@ -643,9 +885,7 @@ function openImportModal() {
                 Ingredients (${draft.ingredients.length})
               </summary>
               <ul class="ingredients-list" style="max-height: 150px; margin-top: 10px;">
-                ${draft.ingredients.map(i =>
-                  `<li>${i.amount ?? ''} ${i.unit ?? ''} ${i.item ?? ''}`.trim()
-                ).join('')}
+                ${draft.ingredients.map(i => `<li>${i.amount ?? ''} ${i.unit ?? ''} ${i.item ?? ''}</li>`.trim()).join('')}
               </ul>
             </details>
             <details style="margin: 10px 0;">
@@ -658,7 +898,7 @@ function openImportModal() {
         `;
         preview.style.display = 'block';
 
-        // Store draft for save button
+        // Store draft for save
         saveBtn._draft = draft;
         saveBtn.style.display = 'inline-block';
         saveBtn.disabled = false;
@@ -667,13 +907,34 @@ function openImportModal() {
         statusEl.style.color = 'var(--accent)';
       } catch (error) {
         console.error('Import failed:', error);
-        statusEl.textContent = '❌ Failed: ' + (error?.message || 'Unknown error');
+
+        const domain = (() => {
+          try { return new URL(url || baseHref || '').hostname; } catch { return 'This site'; }
+        })();
+        const msg = String(error?.message || '').toLowerCase();
+
+        let errorMsg = '❌ Failed: ';
+        if (urlModeActive && (msg.includes('cors') || msg.includes('opaque') || msg.includes('blocks direct access'))) {
+          errorMsg += `${domain} blocks direct access. Try a different site or switch to “Paste HTML / JSON-LD”.`;
+        } else if (msg.includes('no recipe') || msg.includes('unable to parse')) {
+          errorMsg += 'No recipe detected. If you pasted HTML, ensure it contains JSON-LD or visible recipe content.';
+        } else if (msg.includes('timeout')) {
+          errorMsg += 'Request timed out. The site may be slow or blocking requests.';
+        } else if (msg.includes('network')) {
+          errorMsg += 'Network issue. Check your connection or try again.';
+        } else {
+          errorMsg += (error?.message || 'Unknown error');
+        }
+
+        statusEl.textContent = errorMsg;
         statusEl.style.color = 'var(--danger)';
-        parseBtn.disabled = false;
+      } finally {
+        parsing = false;
+        updateParseEnabled();
       }
     });
 
-    // Save button click (wire once)
+    // Save button click
     saveBtn.addEventListener('click', async () => {
       if (!saveBtn._draft) return;
 
@@ -707,14 +968,21 @@ function openImportModal() {
   // Show modal
   modal.classList.add('active');
 
-  // Reset form
+  // Reset fields each time modal opens
   const urlInput = modal.querySelector('#import-url-input');
+  const pasteText = modal.querySelector('#import-paste-text');
+  const baseUrlInput = modal.querySelector('#import-baseurl-input');
   const parseBtn = modal.querySelector('#import-parse-btn');
   const saveBtn  = modal.querySelector('#import-save-btn');
   const statusEl = modal.querySelector('#import-status');
   const preview  = modal.querySelector('#import-preview');
 
+  // Default to URL mode each open
+  modal.querySelector('#mode-url-btn')?.click();
+
   urlInput.value = '';
+  pasteText && (pasteText.value = '');
+  baseUrlInput && (baseUrlInput.value = '');
   parseBtn.disabled = true;
   saveBtn.style.display = 'none';
   saveBtn.disabled = true;
@@ -725,6 +993,9 @@ function openImportModal() {
   setTimeout(() => urlInput.focus(), 100);
 }
 // Placement: put this function BEFORE saveRecipe() in your Nutriplan.html
+
+// Placement: put this function BEFORE saveRecipe() in your Nutriplan.html
+
 // closeImportModal()
 function closeImportModal() {
     const modal = document.getElementById('import-modal');
@@ -1180,6 +1451,7 @@ function resolveUrl(url) {
 
   return u.toString();
 }
+/*
 // fetchDocument(url)
 async function fetchDocument(url) {
   // Fetch a CORS-enabled page and return { html, finalUrl, contentType }.
@@ -1218,6 +1490,64 @@ async function fetchDocument(url) {
     contentType
   };
 }  
+*/
+async function fetchDocument(url) {
+  // Fetch a CORS-enabled page and return { html, finalUrl, contentType }.
+  // Classifies errors (CORS vs timeout vs network).
+  const MAX_CHARS = 2_500_000; // ~2.5MB cap
+  const TIMEOUT_MS = 15_000;
+
+  const withTimeout = async (input, init) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      return await fetch(input, { ...init, signal: ctrl.signal, redirect: 'follow', mode: 'cors', credentials: 'omit' });
+    } finally {
+      clearTimeout(t);
+    }
+  };
+
+  const toTextCapped = async (resp) => {
+    const raw = await resp.text();
+    return raw.length > MAX_CHARS ? raw.slice(0, MAX_CHARS) : raw;
+  };
+
+  try {
+    const resp = await withTimeout(url, { method: 'GET' });
+    if (resp.type === 'opaque') {
+      // Likely CORS block; confirm reachability
+      try { await fetch(url, { mode: 'no-cors' }); } catch {}
+      throw new Error('CORS blocked: site does not allow cross-origin HTML fetch.');
+    }
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const contentType = resp.headers.get('content-type') || '';
+    const html = await toTextCapped(resp);
+    if (!html || !html.trim()) throw new Error('Empty body');
+
+    return { html, finalUrl: resp.url || url, contentType };
+  } catch (err) {
+    const raw = String(err?.message || err || '');
+    const lower = raw.toLowerCase();
+
+    // Try reachability hint: if this doesn't throw, site exists but blocks CORS
+    let reachable = false;
+    try { await fetch(url, { mode: 'no-cors' }); reachable = true; } catch {}
+
+    if (/aborted|timeout|aborterror/.test(lower)) {
+      throw new Error('Timeout: the site was too slow to respond.');
+    }
+    if (reachable || /cors|opaque/.test(lower)) {
+      throw new Error('CORS blocked: site does not allow cross-origin HTML fetch.');
+    }
+    if (/networkerror|failed to fetch/.test(lower)) {
+      throw new Error('Network error: unable to reach the site.');
+    }
+    throw new Error(raw || 'Unknown fetch error');
+  }
+}
+// Placement: put this function BEFORE saveRecipe() in your Nutriplan.html
+
 
 // extractWithSelectors(doc)
 function extractWithSelectors(doc) {
@@ -3375,9 +3705,10 @@ function coalesceTime(total, prep, cook) {
         }
 
         // Close modals on backdrop click
-        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal')].forEach(m => {
-            m.addEventListener('click', e => {
-                if (e.target === m) m.classList.remove('active');
+        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal'), document.getElementById('bookmarkletModal')].forEach(m => {
+			if (!m) return;
+			m.addEventListener('click', e => {
+			if (e.target === m) m.classList.remove('active');
             });
         });
 
