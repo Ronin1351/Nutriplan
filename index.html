@@ -3285,52 +3285,61 @@ function coalesceTime(total, prep, cook) {
             }
         }
 
-        async function refreshRecipesFromSupabase() {
-            const cu = getCurrentUser();
-            const isAdmin = cu?.is_admin || false;
-            
-            const select = encodeURIComponent('id,name,category,servings,prep_time,ingredients,instructions,image_url,submitted_by,approved,created_at,average_rating,rating_count');
-            
-            let query;
-            if (isAdmin) {
-                query = `select=${select}&order=created_at.desc`;
-                document.getElementById('approvalTab').style.display = 'block';
-            } else if (cu) {
-                // Get recipes user has saved
-                const userRecipes = await supaFetch('user_recipes', {
-                    method: 'GET',
-                    query: `user_id=eq.${cu.id}`
-                });
-                
-                if (userRecipes && userRecipes.length > 0) {
-                    const recipeIds = userRecipes.map(ur => ur.recipe_id).join(',');
-                    query = `select=${select}&id=in.(${recipeIds})&order=created_at.desc`;
-                } else {
-                    recipes = [];
-                    renderRecipes();
-                    return;
-                }
-                
-                document.getElementById('approvalTab').style.display = 'none';
-            } else {
-                query = `select=${select}&approved=eq.true&order=created_at.desc&limit=20`;
-                document.getElementById('approvalTab').style.display = 'none';
-            }
-            
-            try {
-                const rows = await supaFetch('recipes', { method: 'GET', query });
-                recipes = rows.map(rowToRecipe);
-                renderRecipes();
-                
-                if (isAdmin) {
-                    const pendingCount = recipes.filter(r => !r.approved).length;
-                    const approvalTab = document.getElementById('approvalTab');
-                    approvalTab.textContent = pendingCount > 0 ? `✅ Approval (${pendingCount})` : '✅ Approval';
-                }
-            } catch(e) {
-                console.warn('❌ Supabase load failed:', e.message);
-            }
-        }
+			const cu = getCurrentUser();
+			const isAdmin = cu?.is_admin || false;
+			
+			const select = encodeURIComponent('id,name,category,servings,prep_time,ingredients,instructions,image_url,submitted_by,approved,created_at,average_rating,rating_count');
+			
+			try {
+				if (isAdmin) {
+					// Admins see everything
+					const query = `select=${select}&order=created_at.desc`;
+					const rows = await supaFetch('recipes', { method: 'GET', query });
+					recipes = rows.map(rowToRecipe);
+					document.getElementById('approvalTab').style.display = 'block';
+					
+					const pendingCount = recipes.filter(r => !r.approved).length;
+					const approvalTab = document.getElementById('approvalTab');
+					approvalTab.textContent = pendingCount > 0 ? `✅ Approval (${pendingCount})` : '✅ Approval';
+					
+				} else if (cu) {
+					// Logged-in users see: ALL approved recipes + their own pending recipes
+					
+					// Fetch all approved recipes (available to everyone)
+					const approvedQuery = `select=${select}&approved=eq.true&order=created_at.desc`;
+					const approvedRecipes = await supaFetch('recipes', { method: 'GET', query: approvedQuery });
+					
+					// Fetch user's own pending recipes
+					const pendingQuery = `select=${select}&submitted_by=eq.${encodeURIComponent(cu.username || cu.email)}&approved=eq.false`;
+					const userPendingRecipes = await supaFetch('recipes', { method: 'GET', query: pendingQuery });
+					
+					// Merge and deduplicate by ID
+					const allRecipes = [...approvedRecipes, ...userPendingRecipes];
+					const uniqueRecipes = Array.from(
+						new Map(allRecipes.map(r => [r.id, r])).values()
+					);
+					
+					recipes = uniqueRecipes.map(rowToRecipe);
+					document.getElementById('approvalTab').style.display = 'none';
+					
+				} else {
+					// Guests see only approved recipes (limited to 20)
+					const query = `select=${select}&approved=eq.true&order=created_at.desc&limit=20`;
+					const rows = await supaFetch('recipes', { method: 'GET', query });
+					recipes = rows.map(rowToRecipe);
+					document.getElementById('approvalTab').style.display = 'none';
+				}
+				
+				renderRecipes();
+				
+			} catch(e) {
+				console.error('❌ Supabase load failed:', e);
+				alert('Failed to load recipes. Please refresh the page.');
+				recipes = [];
+				renderRecipes();
+			}
+		}
+
 
         // ===================== TheMealDB Integration =====================
         
