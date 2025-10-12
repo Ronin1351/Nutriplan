@@ -116,7 +116,26 @@
         .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-top: 20px; }
         .recipe-card { background: var(--bg-secondary); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px var(--shadow); transition: transform 0.3s, box-shadow 0.3s; }
         .recipe-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px var(--shadow); }
-        .recipe-image { width: 100%; height: 200px; object-fit: cover; background: var(--bg-tertiary); cursor: pointer; }
+        .recipe-image { 
+						width: 100%; 
+						height: 200px; 
+						object-fit: cover; 
+						background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary)); 
+						cursor: pointer;
+						position: relative;
+						animation: fadeIn 0.3s ease-in;
+					}
+
+					/* Smooth fade-in when image loads */
+					@keyframes fadeIn {
+						from { opacity: 0; }
+						to { opacity: 1; }
+					}
+
+					.recipe-image:not([src]), 
+					.recipe-image[src=""] {
+						display: none;
+					}
         .recipe-image-placeholder { width: 100%; height: 200px; background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary)); display: flex; align-items: center; justify-content: center; font-size: 3em; opacity: 0.5; cursor: pointer; }
         .recipe-content { padding: 20px; }
         .recipe-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px; }
@@ -2688,7 +2707,13 @@ function coalesceTime(total, prep, cook) {
 			const r = recipes.find(x => String(x.id) === String(recipeId));
 			if (!r) return;
 
-			const img = r.image ? `<img src="${r.image}" alt="${r.name}" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:10px;">` : '';
+			const img = r.image 
+				? `<img src="${r.image}" 
+						alt="${r.name}" 
+						loading="lazy"
+						onerror="this.style.display='none';"
+						style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:10px;">` 
+				: '';
 			const ing = (r.ingredients || []).map(i => `<li>${i.amount} ${i.unit} ${i.item}</li>`).join('');
 			const instr = (r.instructions || '').replace(/\n/g, '<br>');
 
@@ -2762,105 +2787,117 @@ function coalesceTime(total, prep, cook) {
         // ===================== Render Recipes (UPDATED) =====================
         
         async function renderRecipes() {
-            const grid = document.getElementById('recipeGrid');
-            const favoritesOnly = document.getElementById('favoritesOnly').checked;
-            const categoryFilter = document.getElementById('categoryFilter').value;
+			const grid = document.getElementById('recipeGrid');
+			const favoritesOnly = document.getElementById('favoritesOnly').checked;
+			const categoryFilter = document.getElementById('categoryFilter').value;
 
-            const cu = getCurrentUser();
-            const isAdmin = cu?.is_admin || false;
+			const cu = getCurrentUser();
+			const isAdmin = cu?.is_admin || false;
 
-            let filteredRecipes = recipes;
-            if (favoritesOnly) filteredRecipes = filteredRecipes.filter(r => r.isFavorite);
-            if (categoryFilter) filteredRecipes = filteredRecipes.filter(r => r.category === categoryFilter);
+			let filteredRecipes = recipes;
+			if (favoritesOnly) filteredRecipes = filteredRecipes.filter(r => r.isFavorite);
+			if (categoryFilter) filteredRecipes = filteredRecipes.filter(r => r.category === categoryFilter);
 
-            grid.innerHTML = filteredRecipes.map(recipe => `
-                <div class="recipe-card">
-                    ${recipe.image
-                        ? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
-                        : `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
-                    }
-                    <div class="recipe-content">
-                        <div class="recipe-header">
-                            <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
-                            <div class="recipe-actions">
-                                <button class="icon-btn ${recipe.isFavorite ? 'active' : ''}" onclick="toggleFavorite('${recipe.id}')" title="Favorite">
-                                    ${recipe.isFavorite ? '❤️' : '🤍'}
-                                </button>
-                                ${(!recipe.approved && isAdmin) ? `<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>` : ''}
-                                <button class="icon-btn" onclick="editRecipe('${recipe.id}')" title="Edit">✏️</button>
-                                <button class="icon-btn" onclick="deleteRecipe('${recipe.id}')" title="Remove from My Recipes">🗑️</button>
-                            </div>
-                        </div>
-                        <div class="recipe-category">${recipe.category}</div>
-                        
-                        <!-- RATING DISPLAY -->
-                        <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
-                            ${renderStarRating(recipe.averageRating || 0, false)}
-                            <span style="color: var(--text-secondary); font-size: 0.85em;">
-                                ${(recipe.averageRating || 0).toFixed(1)} (${recipe.ratingCount || 0})
-                            </span>
-                        </div>
-                        
-                        <div class="recipe-info">
-                            <div>👥 ${recipe.servings} servings</div>
-                            <div>⏱️ ${recipe.prepTime} mins</div>
-                        </div>
-                        <ul class="ingredients-list">
-                            ${(recipe.ingredients || []).slice(0, 3).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
-                            ${recipe.ingredients.length > 3 ? '<li>...</li>' : ''}
-                        </ul>
-                    </div>
-                </div>
-            `).join('');
-        }
+			grid.innerHTML = filteredRecipes.map(recipe => `
+				<div class="recipe-card">
+					${recipe.image
+						? `<img src="${recipe.image}" 
+								alt="${recipe.name}" 
+								class="recipe-image" 
+								loading="lazy"
+								onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';"
+								onclick="openRecipeModal('${recipe.id}')">
+						   <div class="recipe-image-placeholder" style="display:none;" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+						: `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+					}
+					<div class="recipe-content">
+						<div class="recipe-header">
+							<div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
+							<div class="recipe-actions">
+								<button class="icon-btn ${recipe.isFavorite ? 'active' : ''}" onclick="toggleFavorite('${recipe.id}')" title="Favorite">
+									${recipe.isFavorite ? '❤️' : '🤍'}
+								</button>
+								${(!recipe.approved && isAdmin) ? `<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>` : ''}
+								<button class="icon-btn" onclick="editRecipe('${recipe.id}')" title="Edit">✏️</button>
+								<button class="icon-btn" onclick="deleteRecipe('${recipe.id}')" title="Remove from My Recipes">🗑️</button>
+							</div>
+						</div>
+						<div class="recipe-category">${recipe.category}</div>
+						
+						<!-- RATING DISPLAY -->
+						<div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+							${renderStarRating(recipe.averageRating || 0, false)}
+							<span style="color: var(--text-secondary); font-size: 0.85em;">
+								${(recipe.averageRating || 0).toFixed(1)} (${recipe.ratingCount || 0})
+							</span>
+						</div>
+						
+						<div class="recipe-info">
+							<div>👥 ${recipe.servings} servings</div>
+							<div>⏱️ ${recipe.prepTime} mins</div>
+						</div>
+						<ul class="ingredients-list">
+							${(recipe.ingredients || []).slice(0, 3).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
+							${recipe.ingredients.length > 3 ? '<li>...</li>' : ''}
+						</ul>
+					</div>
+				</div>
+			`).join('');
+		}
 
         // ===================== Approval Grid =====================
         
         function renderApprovalGrid() {
-            const grid = document.getElementById('approvalGrid');
-            const noMessage = document.getElementById('noPendingMessage');
-            
-            const pendingRecipes = recipes.filter(r => !r.approved);
-            
-            if (pendingRecipes.length === 0) {
-                grid.innerHTML = '';
-                noMessage.style.display = 'block';
-                return;
-            }
-            
-            noMessage.style.display = 'none';
-            
-            grid.innerHTML = pendingRecipes.map(recipe => `
-                <div class="recipe-card" style="border: 2px solid var(--warning);">
-                    ${recipe.image
-                        ? `<img src="${recipe.image}" alt="${recipe.name}" class="recipe-image" onclick="openRecipeModal('${recipe.id}')">`
-                        : `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
-                    }
-                    <div class="recipe-content">
-                        <div class="recipe-header">
-                            <div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
-                            <div class="recipe-actions">
-                                <button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
-                                <button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
-                            </div>
-                        </div>
-                        <div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING</div>
-                        <div class="recipe-info">
-                            <div>👥 ${recipe.servings}</div>
-                            <div>⏱️ ${recipe.prepTime} mins</div>
-                            <div>👨‍🍳 ${recipe.submittedBy}</div>
-                        </div>
-                        <ul class="ingredients-list">
-                            ${(recipe.ingredients || []).slice(0, 3).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
-                        </ul>
-                        <div style="display:flex;gap:8px;margin-top:10px;">
-                            <button class="btn btn-small" onclick="approveRecipe('${recipe.id}')">✅ Approve</button>
-                            <button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
+			const grid = document.getElementById('approvalGrid');
+			const noMessage = document.getElementById('noPendingMessage');
+			
+			const pendingRecipes = recipes.filter(r => !r.approved);
+			
+			if (pendingRecipes.length === 0) {
+				grid.innerHTML = '';
+				noMessage.style.display = 'block';
+				return;
+			}
+			
+			noMessage.style.display = 'none';
+			
+			grid.innerHTML = pendingRecipes.map(recipe => `
+				<div class="recipe-card" style="border: 2px solid var(--warning);">
+					${recipe.image
+						? `<img src="${recipe.image}" 
+								alt="${recipe.name}" 
+								class="recipe-image" 
+								loading="lazy"
+								onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';"
+								onclick="openRecipeModal('${recipe.id}')">
+						   <div class="recipe-image-placeholder" style="display:none;" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+						: `<div class="recipe-image-placeholder" onclick="openRecipeModal('${recipe.id}')">🍽️</div>`
+					}
+					<div class="recipe-content">
+						<div class="recipe-header">
+							<div class="recipe-title" onclick="openRecipeModal('${recipe.id}')">${recipe.name}</div>
+							<div class="recipe-actions">
+								<button class="icon-btn" onclick="approveRecipe('${recipe.id}')" title="Approve Recipe">✅</button>
+								<button class="icon-btn" onclick="rejectRecipe('${recipe.id}')" title="Reject & Delete" style="color: var(--danger);">❌</button>
+							</div>
+						</div>
+						<div class="recipe-category" style="background: var(--warning);">${recipe.category} • PENDING</div>
+						<div class="recipe-info">
+							<div>👥 ${recipe.servings}</div>
+							<div>⏱️ ${recipe.prepTime} mins</div>
+							<div>👨‍🍳 ${recipe.submittedBy}</div>
+						</div>
+						<ul class="ingredients-list">
+							${(recipe.ingredients || []).slice(0, 3).map(ing => `<li>${ing.amount} ${ing.unit} ${ing.item}</li>`).join('')}
+						</ul>
+						<div style="display:flex;gap:8px;margin-top:10px;">
+							<button class="btn btn-small" onclick="approveRecipe('${recipe.id}')">✅ Approve</button>
+							<button class="btn btn-danger btn-small" onclick="rejectRecipe('${recipe.id}')">❌ Reject</button>
+						</div>
+					</div>
+				</div>
+			`).join('');
+		}
 
         // ===================== Delete Recipe (FIXED - Removes from user collection only!) =====================
         
@@ -3714,4 +3751,3 @@ function coalesceTime(total, prep, cook) {
     </script>
 </body>
 </html>
-
