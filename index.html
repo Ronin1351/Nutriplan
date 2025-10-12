@@ -2322,9 +2322,17 @@ function collectCandidateImages(doc, baseUrl) {
 }
 // guessCategoryFromTags(tags)
 // guessCategory(ingredients, tags, recipeCuisine)
+// guessCategory(ingredients, tags, recipeCuisine)
 function guessCategory(ingredients, tags, recipeCuisine) {
   // Smart category detection prioritizing main protein ingredient
   // Priority: Main proteins > Vegetarian/Vegan > Dish types > Miscellaneous
+  
+  // Valid categories - MUST match dropdown options
+  const VALID_CATEGORIES = [
+    'Beef', 'Breakfast', 'Chicken', 'Dessert', 'Goat', 'Lamb', 
+    'Miscellaneous', 'Pasta', 'Pork', 'Seafood', 'Side', 
+    'Starter', 'Vegan', 'Vegetarian'
+  ];
   
   // Combine all text sources for analysis
   const allText = [
@@ -2360,11 +2368,11 @@ function guessCategory(ingredients, tags, recipeCuisine) {
     return 'Lamb';
   }
   
-  // Seafood
+  // Seafood - Including Tuna!
   if (contains('fish', 'salmon', 'tuna', 'cod', 'tilapia', 'halibut', 'trout', 
       'shrimp', 'prawn', 'crab', 'lobster', 'scallop', 'clam', 'mussel', 
       'oyster', 'squid', 'octopus', 'anchovy', 'sardine', 'mackerel', 
-      'sea bass', 'snapper', 'catfish', 'seafood')) {
+      'sea bass', 'snapper', 'catfish', 'seafood', 'yellowfin', 'ahi')) {
     return 'Seafood';
   }
   
@@ -2399,7 +2407,38 @@ function guessCategory(ingredients, tags, recipeCuisine) {
     return 'Pasta';
   }
   
+  if (contains('side dish', 'side', 'accompaniment')) {
+    return 'Side';
+  }
+  
+  if (contains('appetizer', 'starter', 'hors d\'oeuvre')) {
+    return 'Starter';
+  }
+  
   // 4) Fallback to Miscellaneous
+  return 'Miscellaneous';
+}
+
+// validateCategory(category) - Ensures only valid categories are used
+function validateCategory(category) {
+  const VALID_CATEGORIES = [
+    'Beef', 'Breakfast', 'Chicken', 'Dessert', 'Goat', 'Lamb', 
+    'Miscellaneous', 'Pasta', 'Pork', 'Seafood', 'Side', 
+    'Starter', 'Vegan', 'Vegetarian'
+  ];
+  
+  if (!category || typeof category !== 'string') return 'Miscellaneous';
+  
+  // Check if it's already valid
+  if (VALID_CATEGORIES.includes(category)) return category;
+  
+  // Try case-insensitive match
+  const normalized = category.trim();
+  const match = VALID_CATEGORIES.find(c => c.toLowerCase() === normalized.toLowerCase());
+  if (match) return match;
+  
+  // Invalid category - return Miscellaneous
+  console.warn(`Invalid category "${category}" - using Miscellaneous`);
   return 'Miscellaneous';
 }
 // stripHtmlToText(html)
