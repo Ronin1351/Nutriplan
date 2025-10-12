@@ -1296,10 +1296,10 @@ async function maybeCacheImage(imageUrl) {
     return imageUrl;
   }
 }
-// saveImportedRecipe(draft)
+
 
 // ===================== SAVE FUNCTION =====================
-// saveImportedRecipe(draft)
+
 // saveImportedRecipe(draft)
 async function saveImportedRecipe(draft) {
   const statusEl = document.querySelector('#import-status');
@@ -1318,17 +1318,8 @@ async function saveImportedRecipe(draft) {
 
   // Optional: image upload/cache
   let image_url = draft.image_url || '';
-  if (image_url && /^https?:/i.test(image_url) && typeof uploadRecipeImage === 'function') {
-    try {
-      setStatus('Uploading image…');
-      const resp = await fetch(image_url);
-      const blob = await resp.blob();
-      const file = new File([blob], 'imported-image.jpg', { type: blob.type || 'image/jpeg' });
-      image_url = await uploadRecipeImage(file);
-    } catch (e) {
-      console.warn('Image upload failed, using original URL:', e);
-    }
-  }
+  setStatus('Preparing recipe data…');
+  console.log('Using image URL:', image_url);
 
   // Dedupe (optional but recommended)
 
@@ -3724,3 +3715,4 @@ function coalesceTime(total, prep, cook) {
     </script>
 </body>
 </html>
+
