@@ -1346,7 +1346,7 @@ async function saveImportedRecipe(draft) {
     return await supaFetch('recipes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: payload
     });
   })();
 
@@ -1358,8 +1358,7 @@ async function saveImportedRecipe(draft) {
       setStatus('Linking to your collection…');
       await supaFetch('user_recipes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: cu.id, recipe_id: recipeId })
+        body: { user_id: cu.id, recipe_id: recipeId }
       });
     } catch (e) {
       console.log('Already in collection or error:', e);
