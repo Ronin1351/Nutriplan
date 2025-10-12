@@ -2607,25 +2607,29 @@ function coalesceTime(total, prep, cook) {
         ];
         let mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
         let editingRecipeId = null;
-
-        function rowToRecipe(r) {
-            return {
-                id: r.id,
-                name: r.name,
-                category: r.category || 'Miscellaneous',
-                servings: r.servings || 4,
-                prepTime: r.prep_time || 30,
-                isFavorite: false,
-                image: r.image_url || null,
-                ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
-                instructions: r.instructions || '',
-                submittedBy: r.submitted_by || 'Unknown',
-                approved: !!r.approved,
-                averageRating: r.average_rating || 0,
-                ratingCount: r.rating_count || 0
-            };
-        }
-
+		function rowToRecipe(r) {
+		    // Re-guess category from ingredients to fix any invalid stored categories
+		    const ingredients = Array.isArray(r.ingredients) ? r.ingredients : [];
+		    const fixedCategory = validateCategory(
+		        guessCategory(ingredients, [], r.category)
+		    );
+		    
+		    return {
+		        id: r.id,
+		        name: r.name,
+		        category: fixedCategory, // Use corrected category
+		        servings: r.servings || 4,
+		        prepTime: r.prep_time || 30,
+		        isFavorite: false,
+		        image: r.image_url || null,
+		        ingredients: ingredients,
+		        instructions: r.instructions || '',
+		        submittedBy: r.submitted_by || 'Unknown',
+		        approved: !!r.approved,
+		        averageRating: r.average_rating || 0,
+		        ratingCount: r.rating_count || 0
+		    };
+		}
         // ===================== RATING SYSTEM (NEW!) =====================
         
         async function rateRecipe(recipeId, rating) {
