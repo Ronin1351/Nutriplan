@@ -2321,60 +2321,85 @@ function collectCandidateImages(doc, baseUrl) {
   return Array.from(out);
 }
 // guessCategoryFromTags(tags)
-function guessCategoryFromTags(tags) {
-  // Prefill a single category from free-form tags/keywords.
-  // Priority: Vegan/Vegetarian > specific proteins > general buckets.
-  // Unknown → "Miscellaneous".
-  if (!tags) return 'Miscellaneous';
-
-  // Normalize to a bag of lowercase tokens
-  const bag = new Set(
-    (Array.isArray(tags) ? tags : [tags])
-      .flatMap(t => String(t || '')
-        .toLowerCase()
-        .split(/[,\|/;]\s*|[\s]+/))
-      .map(s => s.trim())
-      .filter(Boolean)
-  );
-
-  const has = (...kw) => kw.some(k => bag.has(k));
-
-  // 1) Diet-first
-  if (has('vegan')) return 'Vegetarian';
-  if (has('vegetarian', 'meatless')) return 'Vegetarian';
-
-  // 2) Specific proteins
-  if (has('beef', 'steak', 'ground-beef', 'mince', 'burger')) return 'Beef';
-  if (has('chicken', 'poultry', 'drumstick', 'thigh', 'breast')) return 'Chicken';
-  if (has('pork', 'bacon', 'ham')) return 'Pork';
-  if (has('lamb', 'mutton')) return 'Lamb';
-  if (has('turkey')) return 'Chicken'; // closest existing bucket
-  if (has('fish', 'salmon', 'tuna', 'cod', 'tilapia')) return 'Seafood';
-  if (has('seafood', 'shrimp', 'prawn', 'crab', 'squid', 'octopus', 'mussels')) return 'Seafood';
-  if (has('egg', 'eggs', 'omelette', 'omelet')) return 'Vegetarian'; // many apps treat egg as veg-friendly
-
-  // 3) General dish types
-  if (has('dessert', 'sweet', 'cake', 'cookie', 'brownie', 'pie')) return 'Dessert';
-  if (has('breakfast', 'brunch', 'pancake', 'waffle')) return 'Breakfast';
-  if (has('soup', 'stew', 'broth', 'chowder')) return 'Soup';
-  if (has('salad')) return 'Salad';
-  if (has('pasta', 'noodle', 'noodles', 'spaghetti', 'lasagna')) return 'Pasta';
-  if (has('bread', 'baking', 'loaf', 'bun', 'roll')) return 'Bread';
-  if (has('drink', 'beverage', 'smoothie', 'juice', 'cocktail', 'mocktail')) return 'Beverage';
-  if (has('sauce', 'condiment', 'dressing')) return 'Sauce';
-  if (has('appetizer', 'starter', 'snack', 'tapas')) return 'Appetizer';
-  if (has('rice', 'risotto', 'fried-rice', 'pilaf', 'paella')) return 'Rice';
-
-  // 4) Cuisines that imply common defaults (optional)
-  if (has('italian')) return 'Pasta';
-  if (has('japanese', 'sushi', 'ramen')) return 'Seafood';
-  if (has('filipino', 'adobo', 'sinigang')) return 'Pork';
-  if (has('indian', 'curry')) return has('vegetarian') ? 'Vegetarian' : 'Chicken';
-  if (has('mexican', 'taco', 'enchilada')) return 'Beef';
-
-  // 5) Fallbacks
-  if (has('vegetable', 'veggies', 'veggie')) return 'Vegetarian';
-
+// guessCategory(ingredients, tags, recipeCuisine)
+function guessCategory(ingredients, tags, recipeCuisine) {
+  // Smart category detection prioritizing main protein ingredient
+  // Priority: Main proteins > Vegetarian/Vegan > Dish types > Miscellaneous
+  
+  // Combine all text sources for analysis
+  const allText = [
+    ...(Array.isArray(ingredients) ? ingredients.map(i => i.item || '') : []),
+    recipeCuisine || '',
+    ...(Array.isArray(tags) ? tags : [tags || ''])
+  ].join(' ').toLowerCase();
+  
+  // Helper to check if text contains any of the keywords
+  const contains = (...keywords) => keywords.some(k => allText.includes(k.toLowerCase()));
+  
+  // 1) PRIORITY: Check for main proteins in ingredients
+  // Beef
+  if (contains('beef', 'steak', 'brisket', 'chuck', 'ribeye', 'sirloin', 'tenderloin', 
+      'ground beef', 'mince', 'hamburger', 'veal', 'oxtail', 'short rib')) {
+    return 'Beef';
+  }
+  
+  // Chicken
+  if (contains('chicken', 'poultry', 'drumstick', 'thigh', 'breast', 'wing', 
+      'hen', 'rooster', 'chicken breast', 'chicken thigh')) {
+    return 'Chicken';
+  }
+  
+  // Pork
+  if (contains('pork', 'bacon', 'ham', 'sausage', 'prosciutto', 'pancetta', 
+      'pork chop', 'pork loin', 'pork belly', 'ribs', 'spare rib', 'chorizo')) {
+    return 'Pork';
+  }
+  
+  // Lamb
+  if (contains('lamb', 'mutton', 'lamb chop', 'lamb shank', 'rack of lamb', 'goat')) {
+    return 'Lamb';
+  }
+  
+  // Seafood
+  if (contains('fish', 'salmon', 'tuna', 'cod', 'tilapia', 'halibut', 'trout', 
+      'shrimp', 'prawn', 'crab', 'lobster', 'scallop', 'clam', 'mussel', 
+      'oyster', 'squid', 'octopus', 'anchovy', 'sardine', 'mackerel', 
+      'sea bass', 'snapper', 'catfish', 'seafood')) {
+    return 'Seafood';
+  }
+  
+  // Turkey (less common but specific)
+  if (contains('turkey', 'turkey breast')) {
+    return 'Chicken'; // Group with poultry
+  }
+  
+  // 2) Check for Vegetarian/Vegan if no meat found
+  if (contains('tofu', 'tempeh', 'seitan', 'vegan', 'plant-based')) {
+    return 'Vegan';
+  }
+  
+  if (contains('vegetarian', 'meatless', 'veggie') || 
+      (contains('vegetable', 'vegetables') && !contains('meat', 'chicken', 'beef', 'pork', 'fish'))) {
+    return 'Vegetarian';
+  }
+  
+  // 3) Check for specific dish types
+  if (contains('dessert', 'cake', 'cookie', 'brownie', 'pie', 'tart', 'pudding', 
+      'ice cream', 'sweet', 'chocolate', 'candy')) {
+    return 'Dessert';
+  }
+  
+  if (contains('breakfast', 'brunch', 'pancake', 'waffle', 'french toast', 'cereal', 
+      'oatmeal', 'eggs', 'omelet', 'omelette')) {
+    return 'Breakfast';
+  }
+  
+  if (contains('pasta', 'spaghetti', 'linguine', 'fettuccine', 'penne', 'rigatoni', 
+      'lasagna', 'ravioli', 'tortellini', 'macaroni', 'noodle')) {
+    return 'Pasta';
+  }
+  
+  // 4) Fallback to Miscellaneous
   return 'Miscellaneous';
 }
 // stripHtmlToText(html)
