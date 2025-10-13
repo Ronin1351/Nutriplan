@@ -324,43 +324,61 @@
                            oninput="filterPantryItems()">
                 </div>
                 
-                <div class="pantry-form" style="grid-template-columns: 2fr 1fr 1fr 1fr auto;">
-                    <input type="text" id="pantryItem" placeholder="Item name..." required>
-                    <input type="number" id="pantryAmount" placeholder="Amount" step="0.01" required>
-                    <select id="pantryUnit">
-						<optgroup label="Count">
-							<option value="units">units</option>
-							<option value="ea">each (ea)</option>
-							<option value="piece">piece</option>
-							<option value="pcs">pcs</option>
-							<option value="dozen">dozen</option>
-							<option value="can">can</option>
-							<option value="box">box</option>
-							<option value="bag">bag</option>
-							<option value="bottle">bottle</option>
-							<option value="jar">jar</option>
-							<option value="pack">pack</option>
-						</optgroup>
-						<optgroup label="Weight">
-							<option value="kg">kg</option>
-							<option value="g">g</option>
-							<option value="lb">lb (pound)</option>
-							<option value="oz">oz (ounce)</option>
-						</optgroup>
-						<optgroup label="Volume">
-							<option value="L">L (liter)</option>
-							<option value="ml">ml</option>
-							<option value="cup">cup</option>
-							<option value="tbsp">tbsp</option>
-							<option value="tsp">tsp</option>
-							<option value="gal">gallon</option>
-							<option value="qt">quart</option>
-							<option value="pt">pint</option>
-						</optgroup>
-					</select>
-                    <input type="number" id="pantryPrice" placeholder="Price (required)" step="0.01" min="0" required>
-                    <button class="btn" onclick="addPantryItem()">Add</button>
-                </div>
+					<div class="pantry-form" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto auto;">
+						<input type="text" id="pantryItem" placeholder="Item name..." required>
+						<input type="number" id="pantryAmount" placeholder="Amount" step="0.01" required>
+						<select id="pantryUnit">
+							<optgroup label="Count">
+								<option value="units">units</option>
+								<option value="ea">each (ea)</option>
+								<option value="piece">piece</option>
+								<option value="pcs">pcs</option>
+								<option value="dozen">dozen</option>
+								<option value="can">can</option>
+								<option value="box">box</option>
+								<option value="bag">bag</option>
+								<option value="bottle">bottle</option>
+								<option value="jar">jar</option>
+								<option value="pack">pack</option>
+							</optgroup>
+							<optgroup label="Weight">
+								<option value="kg">kg</option>
+								<option value="g">g</option>
+								<option value="lb">lb (pound)</option>
+								<option value="oz">oz (ounce)</option>
+							</optgroup>
+							<optgroup label="Volume">
+								<option value="L">L (liter)</option>
+								<option value="ml">ml</option>
+								<option value="cup">cup</option>
+								<option value="tbsp">tbsp</option>
+								<option value="tsp">tsp</option>
+								<option value="gal">gallon</option>
+								<option value="qt">quart</option>
+								<option value="pt">pint</option>
+							</optgroup>
+						</select>
+						<input type="number" id="pantryPrice" placeholder="Price (required)" step="0.01" min="0" required>
+						<input type="date" id="pantryExpiration" placeholder="Expiration" title="Expiration Date (optional)">
+						<select id="pantryCategory" title="Category">
+							<option value="Poultry">🐔 Poultry</option>
+							<option value="Produce">🥬 Produce</option>
+							<option value="Meat">🍗 Meat</option>
+							<option value="Seafood">🐟 Seafood</option>
+							<option value="Dairy">🥛 Dairy</option>
+							<option value="Grains">🌾 Grains</option>
+							<option value="Spices">🌶️ Spices</option>
+							<option value="Canned">🥫 Canned</option>
+							<option value="Frozen">🧊 Frozen</option>
+							<option value="Beverages">🥤 Beverages</option>
+							<option value="Snacks">🍿 Snacks</option>
+							<option value="Condiments">🧈 Condiments</option>
+							<option value="Baking">🍰 Baking</option>
+							<option value="Uncategorized">📦 Other</option>
+						</select>
+						<button class="btn" onclick="addPantryItem()">Add</button>
+						<button class="btn btn-secondary" onclick="togglePantryHistory()" title="Show out-of-stock items">📋 History</button>
+					</div>
                 <div class="pantry-items" id="pantryItems"></div>
             </div>
         </div>
@@ -864,6 +882,88 @@ function convertUnits(amount, fromUnit, toUnit, ingredientName = '') {
     return amount;
 }
 
+// ===================== PANTRY CATEGORIES =====================
+
+const PANTRY_CATEGORIES = {
+	'Poultry': '🐔',
+    'Produce': '🥬',
+    'Meat': '🍗',
+    'Seafood': '🐟',
+    'Dairy': '🥛',
+    'Grains': '🌾',
+    'Spices': '🌶️',
+    'Canned': '🥫',
+    'Frozen': '🧊',
+    'Beverages': '🥤',
+    'Snacks': '🍿',
+    'Condiments': '🧈',
+    'Baking': '🍰',
+    'Uncategorized': '📦'
+};
+
+function getCategoryIcon(category) {
+    return PANTRY_CATEGORIES[category] || '📦';
+}
+
+function getExpirationStatus(expirationDate) {
+    if (!expirationDate) return { color: 'transparent', label: '', class: '', days: null };
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expDate = new Date(expirationDate);
+    expDate.setHours(0, 0, 0, 0);
+    const daysUntil = Math.floor((expDate - today) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntil < 0) {
+        return { 
+            color: '#ef5350', 
+            label: `❌ EXPIRED ${Math.abs(daysUntil)}d ago`, 
+            class: 'expired', 
+            days: daysUntil,
+            urgent: true
+        };
+    } else if (daysUntil === 0) {
+        return { 
+            color: '#ff6b6b', 
+            label: '⚠️ EXPIRES TODAY', 
+            class: 'expires-today', 
+            days: 0,
+            urgent: true
+        };
+    } else if (daysUntil <= 3) {
+        return { 
+            color: '#ff8a80', 
+            label: `⚠️ ${daysUntil} day${daysUntil > 1 ? 's' : ''} left`, 
+            class: 'expires-soon', 
+            days: daysUntil,
+            urgent: true
+        };
+    } else if (daysUntil <= 7) {
+        return { 
+            color: '#ffb74d', 
+            label: `⚠️ ${daysUntil} days left`, 
+            class: 'expires-warning', 
+            days: daysUntil,
+            urgent: false
+        };
+    } else if (daysUntil <= 14) {
+        return { 
+            color: '#ffd93d', 
+            label: `${daysUntil} days left`, 
+            class: 'expires-caution', 
+            days: daysUntil,
+            urgent: false
+        };
+    } else {
+        return { 
+            color: 'var(--text-secondary)', 
+            label: `${daysUntil} days`, 
+            class: 'fresh', 
+            days: daysUntil,
+            urgent: false
+        };
+    }
+}
 // ===================== RECIPE COST CALCULATION =====================
 
 function calculateRecipeCost(recipe) {
@@ -3844,7 +3944,10 @@ function coalesceTime(total, prep, cook) {
             }
         }
 
-        // ===================== Pantry =====================
+		// ===================== Pantry =====================
+
+		let showingPantryHistory = false;
+		let currentNotesItemId = null;
 
 		async function loadPantryFromSupabase() {
 			const cu = getCurrentUser();
@@ -3866,7 +3969,11 @@ function coalesceTime(total, prep, cook) {
 					item: row.item,
 					amount: parseFloat(row.amount),
 					unit: row.unit,
-					price: parseFloat(row.price)
+					price: parseFloat(row.price),
+					expiration_date: row.expiration_date,
+					category: row.category || 'Uncategorized',
+					notes: row.notes,
+					is_active: row.is_active !== false
 				}));
 				
 				console.log(`✅ Loaded ${pantry.length} pantry items`);
@@ -3882,14 +3989,6 @@ function coalesceTime(total, prep, cook) {
 		function renderPantry(searchTerm = '') {
 			const container = document.getElementById('pantryItems');
 			
-			// Filter pantry items by search term
-			let displayItems = pantry;
-			if (searchTerm) {
-				displayItems = pantry.filter(item => 
-					item.item.toLowerCase().includes(searchTerm.toLowerCase())
-				);
-			}
-			
 			const cu = getCurrentUser();
 			
 			if (!cu) {
@@ -3897,41 +3996,148 @@ function coalesceTime(total, prep, cook) {
 				return;
 			}
 			
+			// Filter: active/inactive + search
+			let displayItems = showingPantryHistory 
+				? pantry.filter(item => !item.is_active || item.amount === 0)
+				: pantry.filter(item => item.is_active && item.amount > 0);
+			
+			if (searchTerm) {
+				displayItems = displayItems.filter(item => 
+					item.item.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					item.category.toLowerCase().includes(searchTerm.toLowerCase())
+				);
+			}
+			
+			// Sort by expiration (urgent first), then by item name
+			displayItems.sort((a, b) => {
+				const statusA = getExpirationStatus(a.expiration_date);
+				const statusB = getExpirationStatus(b.expiration_date);
+				
+				if (statusA.urgent && !statusB.urgent) return -1;
+				if (!statusA.urgent && statusB.urgent) return 1;
+				
+				if (statusA.days !== null && statusB.days !== null) {
+					if (statusA.days !== statusB.days) return statusA.days - statusB.days;
+				} else if (statusA.days !== null) {
+					return -1;
+				} else if (statusB.days !== null) {
+					return 1;
+				}
+				
+				return a.item.localeCompare(b.item);
+			});
+			
 			if (pantry.length === 0) {
 				container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No items in pantry. Add some ingredients above!</div>';
 				return;
 			}
 			
 			if (displayItems.length === 0) {
-				container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No items found matching "${searchTerm}"</div>`;
+				if (showingPantryHistory) {
+					container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">📋 No out-of-stock items in history</div>';
+				} else {
+					container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No items found${searchTerm ? ` matching "${searchTerm}"` : ''}</div>`;
+				}
 				return;
 			}
 			
-			// Calculate total pantry value
-			const totalValue = pantry.reduce((sum, item) => sum + (item.amount * (item.price || 0)), 0);
+			// Calculate total pantry value (only active items)
+			const activeItems = pantry.filter(item => item.is_active && item.amount > 0);
+			const totalValue = activeItems.reduce((sum, item) => sum + (item.amount * item.price), 0);
 			
-			container.innerHTML = `
-				<div style="background: var(--accent); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+			const header = showingPantryHistory 
+				? `<div style="background: var(--bg-tertiary); color: var(--text-primary); padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+					<span style="font-weight: 600;">📋 Out of Stock History (${displayItems.length})</span>
+					<button class="btn btn-small" onclick="togglePantryHistory()">← Back to Active Items</button>
+				   </div>`
+				: `<div style="background: var(--accent); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
 					<span style="font-weight: 600;">💰 Total Pantry Value:</span>
 					<span style="font-size: 1.2em; font-weight: 700;">${formatPrice(totalValue)}</span>
-				</div>
-				${searchTerm ? `<div style="padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; font-size: 0.9em;">Showing ${displayItems.length} of ${pantry.length} items</div>` : ''}
-				${displayItems.map((item) => {
-					const itemValue = item.amount * (item.price || 0);
-					const isLowStock = item.amount < 100 && item.unit === 'g';
-					
+				   </div>`;
+			
+			const searchInfo = searchTerm 
+				? `<div style="padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; font-size: 0.9em;">
+					Showing ${displayItems.length} of ${showingPantryHistory ? pantry.filter(i => !i.is_active).length : activeItems.length} items
+				   </div>` 
+				: '';
+			
+			container.innerHTML = header + searchInfo + displayItems.map((item) => {
+				const itemValue = item.amount * item.price;
+				const icon = getCategoryIcon(item.category);
+				const expStatus = getExpirationStatus(item.expiration_date);
+				const hasNotes = item.notes && item.notes.trim();
+				
+				const expBadge = expStatus.label 
+					? `<div style="display: inline-block; background: ${expStatus.color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600; margin-left: 8px;">
+						${expStatus.label}
+					   </div>`
+					: '';
+				
+				if (showingPantryHistory) {
+					// History view: simpler display with "Quick Re-add" button
 					return `
-						<div class="pantry-item ${isLowStock ? 'low-stock' : ''}" style="grid-template-columns: 2fr 1fr 1fr 1fr auto auto;">
-							<div style="font-weight: 500;">${item.item}</div>
-							<div>${item.amount}</div>
+						<div class="pantry-item" style="grid-template-columns: 2fr 1fr 1fr 1fr auto; opacity: 0.7;">
+							<div style="font-weight: 500;">${icon} ${item.item}</div>
 							<div>${item.unit}</div>
-							<div style="color: var(--accent); font-weight: 600;">${formatPrice(item.price || 0)}</div>
+							<div style="color: var(--accent); font-weight: 600;">${formatPrice(item.price)}/${item.unit}</div>
+							<div style="color: var(--text-secondary); font-size: 0.9em;">${item.category}</div>
+							<button class="btn btn-small" onclick="quickReaddItem('${item.id}')" title="Quick re-add">⚡ Re-add</button>
+						</div>
+					`;
+				} else {
+					// Active items: full display
+					return `
+						<div class="pantry-item" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto auto auto; ${expStatus.urgent ? 'border-left: 4px solid ' + expStatus.color + ';' : ''}">
+							<div style="font-weight: 500; display: flex; align-items: center; gap: 6px;">
+								<span style="font-size: 1.3em;">${icon}</span>
+								<div>
+									<div>${item.item}</div>
+									<div style="font-size: 0.85em; color: var(--text-secondary);">${item.category}</div>
+								</div>
+							</div>
+							<div style="font-weight: 600;">${item.amount} ${item.unit}</div>
+							<div style="color: var(--text-secondary); font-size: 0.9em;">${formatPrice(item.price)}/${item.unit}</div>
+							<div style="color: var(--accent); font-weight: 700; font-size: 1.05em;">${formatPrice(itemValue)}</div>
+							<div>${expBadge || '<span style="color: var(--text-secondary); font-size: 0.85em;">No expiration</span>'}</div>
+							<button class="btn btn-secondary btn-small" onclick="openPantryNotes('${item.id}')" title="${hasNotes ? 'View/Edit notes' : 'Add notes'}">
+								${hasNotes ? '📝' : '📄'}
+							</button>
 							<button class="btn btn-secondary btn-small" onclick="editPantryItem('${item.id}')" title="Edit item">✏️</button>
 							<button class="btn btn-danger btn-small" onclick="removePantryItem('${item.id}')">Remove</button>
 						</div>
 					`;
-				}).join('')}
-			`;
+				}
+			}).join('');
+		}
+
+		function togglePantryHistory() {
+			showingPantryHistory = !showingPantryHistory;
+			const historyBtn = document.querySelector('.pantry-form button[onclick*="togglePantryHistory"]');
+			if (historyBtn) {
+				historyBtn.textContent = showingPantryHistory ? '← Back to Pantry' : '📋 History';
+				historyBtn.className = showingPantryHistory ? 'btn' : 'btn btn-secondary';
+			}
+			renderPantry();
+		}
+
+		async function quickReaddItem(itemId) {
+			const item = pantry.find(p => p.id === itemId);
+			if (!item) return;
+			
+			// Pre-fill form with saved data
+			document.getElementById('pantryItem').value = item.item;
+			document.getElementById('pantryAmount').value = '';
+			document.getElementById('pantryUnit').value = item.unit;
+			document.getElementById('pantryPrice').value = item.price;
+			document.getElementById('pantryExpiration').value = '';
+			document.getElementById('pantryCategory').value = item.category;
+			
+			// Scroll to form
+			document.getElementById('pantryItem').scrollIntoView({ behavior: 'smooth', block: 'center' });
+			document.getElementById('pantryAmount').focus();
+			
+			// Show message
+			alert(`💡 "${item.item}" details loaded! Just enter the amount and click Add.`);
 		}
 
 		async function addPantryItem() {
@@ -3945,9 +4151,16 @@ function coalesceTime(total, prep, cook) {
 			const amount = parseFloat(document.getElementById('pantryAmount').value);
 			const unit = document.getElementById('pantryUnit').value;
 			const price = parseFloat(document.getElementById('pantryPrice').value);
+			const expiration = document.getElementById('pantryExpiration').value || null;
+			const category = document.getElementById('pantryCategory').value;
 			
-			if (!item || !amount || amount <= 0) {
-				alert('❌ Please enter item name and a valid amount');
+			if (!item) {
+				alert('❌ Please enter item name');
+				return;
+			}
+			
+			if (!amount || amount <= 0) {
+				alert('❌ Please enter a valid amount greater than 0');
 				return;
 			}
 			
@@ -3979,7 +4192,10 @@ function coalesceTime(total, prep, cook) {
 						body: {
 							amount: totalAmount,
 							unit: unit,
-							price: avgPrice
+							price: avgPrice,
+							expiration_date: expiration,
+							category: category,
+							is_active: true
 						}
 					});
 					
@@ -3994,7 +4210,10 @@ function coalesceTime(total, prep, cook) {
 							item: item,
 							amount: amount,
 							unit: unit,
-							price: price
+							price: price,
+							expiration_date: expiration,
+							category: category,
+							is_active: true
 						}
 					});
 					
@@ -4005,8 +4224,10 @@ function coalesceTime(total, prep, cook) {
 				document.getElementById('pantryItem').value = '';
 				document.getElementById('pantryAmount').value = '';
 				document.getElementById('pantryPrice').value = '';
+				document.getElementById('pantryExpiration').value = '';
 				document.getElementById('pantrySearch').value = '';
 				editingPantryIndex = null;
+				cancelPantryEdit();
 				
 				// Reload pantry from database
 				await loadPantryFromSupabase();
@@ -4016,7 +4237,6 @@ function coalesceTime(total, prep, cook) {
 			} catch (e) {
 				console.error('❌ Failed to add/update pantry item:', e);
 				
-				// Check for unique constraint violation
 				if (e.message.includes('duplicate') || e.message.includes('unique')) {
 					alert('❌ This item already exists. Try editing it instead.');
 				} else {
@@ -4040,20 +4260,22 @@ function coalesceTime(total, prep, cook) {
 			document.getElementById('pantryAmount').value = item.amount;
 			document.getElementById('pantryUnit').value = item.unit;
 			document.getElementById('pantryPrice').value = item.price;
+			document.getElementById('pantryExpiration').value = item.expiration_date || '';
+			document.getElementById('pantryCategory').value = item.category;
 			
 			// Change button text to indicate editing
 			const addBtn = document.querySelector('.pantry-form .btn');
 			addBtn.textContent = 'Update';
 			addBtn.style.background = 'var(--warning)';
 			
-			// Add cancel button
+			// Add cancel button if not exists
 			if (!document.getElementById('cancelPantryEdit')) {
 				const cancelBtn = document.createElement('button');
 				cancelBtn.id = 'cancelPantryEdit';
 				cancelBtn.className = 'btn btn-secondary';
 				cancelBtn.textContent = 'Cancel';
 				cancelBtn.onclick = cancelPantryEdit;
-				addBtn.parentElement.appendChild(cancelBtn);
+				addBtn.parentElement.insertBefore(cancelBtn, addBtn.nextSibling);
 			}
 			
 			// Scroll to form
@@ -4066,6 +4288,7 @@ function coalesceTime(total, prep, cook) {
 			document.getElementById('pantryItem').value = '';
 			document.getElementById('pantryAmount').value = '';
 			document.getElementById('pantryPrice').value = '';
+			document.getElementById('pantryExpiration').value = '';
 			
 			const addBtn = document.querySelector('.pantry-form .btn');
 			addBtn.textContent = 'Add';
@@ -4085,15 +4308,31 @@ function coalesceTime(total, prep, cook) {
 			const item = pantry.find(p => p.id === itemId);
 			if (!item) return;
 			
-			if (!confirm(`Remove "${item.item}" from pantry?`)) return;
+			const action = confirm(`What would you like to do with "${item.item}"?\n\nOK = Mark as empty (save for history)\nCancel = Delete permanently`);
 			
 			try {
-				await supaFetch('pantry', {
-					method: 'DELETE',
-					query: `id=eq.${itemId}`
-				});
-				
-				console.log('✅ Pantry item removed:', item.item);
+				if (action) {
+					// Mark as inactive (keep in history)
+					await supaFetch('pantry', {
+						method: 'PATCH',
+						query: `id=eq.${itemId}`,
+						body: {
+							amount: 0,
+							is_active: false
+						}
+					});
+					
+					console.log('✅ Pantry item marked as empty:', item.item);
+					alert(`✅ "${item.item}" moved to history. Use 📋 History button to quickly re-add it later!`);
+				} else {
+					// Delete permanently
+					await supaFetch('pantry', {
+						method: 'DELETE',
+						query: `id=eq.${itemId}`
+					});
+					
+					console.log('✅ Pantry item deleted:', item.item);
+				}
 				
 				// Reload pantry from database
 				await loadPantryFromSupabase();
@@ -4101,6 +4340,52 @@ function coalesceTime(total, prep, cook) {
 			} catch (e) {
 				console.error('❌ Failed to remove pantry item:', e);
 				alert('❌ Failed to remove item: ' + e.message);
+			}
+		}
+
+		// ===================== Pantry Notes Modal =====================
+
+		function openPantryNotes(itemId) {
+			const item = pantry.find(p => p.id === itemId);
+			if (!item) return;
+			
+			currentNotesItemId = itemId;
+			document.getElementById('notesItemName').textContent = `${getCategoryIcon(item.category)} ${item.item}`;
+			document.getElementById('pantryNotesText').value = item.notes || '';
+			document.getElementById('pantryNotesModal').classList.add('active');
+			
+			setTimeout(() => document.getElementById('pantryNotesText').focus(), 100);
+		}
+
+		function closePantryNotes() {
+			document.getElementById('pantryNotesModal').classList.remove('active');
+			currentNotesItemId = null;
+		}
+
+		async function savePantryNotes() {
+			if (!currentNotesItemId) return;
+			
+			const notes = document.getElementById('pantryNotesText').value.trim();
+			
+			try {
+				await supaFetch('pantry', {
+					method: 'PATCH',
+					query: `id=eq.${currentNotesItemId}`,
+					body: { notes: notes || null }
+				});
+				
+				console.log('✅ Notes saved');
+				
+				// Update local state
+				const item = pantry.find(p => p.id === currentNotesItemId);
+				if (item) item.notes = notes;
+				
+				closePantryNotes();
+				renderPantry();
+				
+			} catch (e) {
+				console.error('❌ Failed to save notes:', e);
+				alert('Failed to save notes: ' + e.message);
 			}
 		}
 
@@ -4559,24 +4844,24 @@ let pendingRecipeForMealPlan = null;
             }
         }
 
-        // Close modals on backdrop click
-        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal'), document.getElementById('bookmarkletModal'), document.getElementById('daySelectorModal')].forEach(m => {
-			if (!m) return;
-			m.addEventListener('click', e => {
-			if (e.target === m) m.classList.remove('active');
+		// Close modals on backdrop click
+        [authModal, profileModal, document.getElementById('addRecipeModal'), document.getElementById('recipeDetailsModal'), document.getElementById('bookmarkletModal'), document.getElementById('daySelectorModal'), document.getElementById('pantryNotesModal')].forEach(m => {
+            if (!m) return;
+            m.addEventListener('click', e => {
+                if (e.target === m) m.classList.remove('active');
             });
         });
 
         // ===================== Initialize App =====================
-
-		(async function init() {
-			await initUser();
-			initCurrency();
-			refreshHeaderUser();
-			await loadPantryFromSupabase();  // ← ADD THIS LINE
-			renderMealPlanner();
-			await refreshRecipesFromSupabase();
-		})();
+        
+        (async function init() {
+            await initUser();
+            initCurrency();
+            refreshHeaderUser();
+            await loadPantryFromSupabase();  // ← ALSO ADD THIS LINE
+            renderMealPlanner();
+            await refreshRecipesFromSupabase();
+        })();
     </script>
 	<!-- Day Selector Modal for Meal Planning -->
     <div class="modal" id="daySelectorModal">
@@ -4625,7 +4910,23 @@ let pendingRecipeForMealPlan = null;
             </div>
         </div>
     </div>
-
+	<!-- Pantry Notes Modal -->
+		<div class="modal" id="pantryNotesModal">
+			<div class="modal-content" style="max-width: 500px;">
+				<h2 style="margin-bottom: 12px;">📝 Item Notes</h2>
+				<div style="margin-bottom: 15px;">
+					<strong id="notesItemName" style="color: var(--accent); font-size: 1.1em;"></strong>
+				</div>
+				<div class="form-group">
+					<label>Notes</label>
+					<textarea id="pantryNotesText" rows="6" placeholder="Brand, store, preferences, etc..." style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary);"></textarea>
+				</div>
+				<div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px;">
+					<button class="btn btn-secondary" onclick="closePantryNotes()">Cancel</button>
+					<button class="btn" onclick="savePantryNotes()">Save Notes</button>
+				</div>
+			</div>
+		</div>
     <style>
         /* Make checkboxes look better */
         .checkbox-wrapper:has(input:checked) {
