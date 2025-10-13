@@ -3380,15 +3380,14 @@ function coalesceTime(total, prep, cook) {
 			} else {
 				currentUser = null;
 				localStorage.removeItem(CURRENT_USER_KEY);
+				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] }; // ✅ ADD THIS
 			}
 			refreshHeaderUser();
 			
-			// Load user-specific pantry
 			await loadPantryFromSupabase();
-			
+			await loadMealPlanFromSupabase(); // ✅ ADD THIS
 			await refreshRecipesFromSupabase();
 		}
-
         async function initUser() {
             try {
                 const stored = JSON.parse(localStorage.getItem(CURRENT_USER_KEY));
@@ -4332,6 +4331,83 @@ function coalesceTime(total, prep, cook) {
 				renderPantry();
 			}
 		}
+		
+		
+		async function loadMealPlanFromSupabase() {
+			const cu = getCurrentUser();
+			if (!cu) {
+				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
+				renderMealPlanner();
+				return;
+			}
+			
+			try {
+				const userId = cu.id;
+				const plans = await supaFetch('meal_plans', {
+					method: 'GET',
+					query: `user_id=eq.${userId}&order=day.asc,position.asc`
+				});
+				
+				// Reset meal plan
+				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
+				
+				// Populate from database
+				plans.forEach(plan => {
+					if (mealPlan[plan.day]) {
+						mealPlan[plan.day].push(String(plan.recipe_id));
+					}
+				});
+				
+				console.log('✅ Loaded meal plan');
+				renderMealPlanner();
+				
+			} catch (e) {
+				console.error('⚠️ Failed to load meal plan:', e);
+				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
+				renderMealPlanner();
+			}
+		}
+		
+		async function saveMealPlanToSupabase() {
+			const cu = getCurrentUser();
+			if (!cu) return;
+			
+			try {
+				const userId = cu.id;
+				
+				// Delete all existing meal plans for this user
+				await supaFetch('meal_plans', {
+					method: 'DELETE',
+					query: `user_id=eq.${userId}`
+				});
+				
+				// Insert current meal plan
+				const planEntries = [];
+				Object.entries(mealPlan).forEach(([day, recipes]) => {
+					recipes.forEach((recipeId, position) => {
+						planEntries.push({
+							user_id: userId,
+							day: day,
+							recipe_id: recipeId,
+							position: position
+						});
+					});
+				});
+				
+				if (planEntries.length > 0) {
+					await supaFetch('meal_plans', {
+						method: 'POST',
+						body: planEntries
+					});
+				}
+				
+				console.log('✅ Meal plan saved');
+				
+			} catch (e) {
+				console.error('⚠️ Failed to save meal plan:', e);
+			}
+		}
+
 
 		function renderPantry(searchTerm = '') {
 			const container = document.getElementById('pantryItems');
@@ -4868,10 +4944,9 @@ let pendingRecipeForMealPlan = null;
 			});
 		}
 
-		function confirmAddToMealPlan() {
+		async function confirmAddToMealPlan() {
 			if (!pendingRecipeForMealPlan) return;
 			
-			// Get selected days
 			const selectedDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].filter(day => {
 				const checkbox = document.getElementById(`day-${day}`);
 				return checkbox && checkbox.checked;
@@ -4882,15 +4957,14 @@ let pendingRecipeForMealPlan = null;
 				return;
 			}
 			
-			// Add recipe to selected days
 			selectedDays.forEach(day => {
 				if (mealPlan[day]) {
 					mealPlan[day].push(String(pendingRecipeForMealPlan));
 				}
 			});
 			
-			// Update UI
 			renderMealPlanner();
+			await saveMealPlanToSupabase(); // ✅ ADD THIS
 			closeDaySelectorModal();
 			
 			// Close recipe modal if open
@@ -4904,18 +4978,20 @@ let pendingRecipeForMealPlan = null;
 			alert(`✅ Recipe added to ${dayText}!`);
 		}
 
-        function addMealToDay(day, recipeId) {
-            if (!recipeId) return;
-            mealPlan[day] = mealPlan[day] || [];
-            mealPlan[day].push(String(recipeId));
-            renderMealPlanner();
-        }
+       async function addMealToDay(day, recipeId) {
+			if (!recipeId) return;
+			mealPlan[day] = mealPlan[day] || [];
+			mealPlan[day].push(String(recipeId));
+			renderMealPlanner();
+			await saveMealPlanToSupabase(); // ✅ ADD THIS
+		}
 
-        function removeMealFromDay(day, index) {
-            if (!mealPlan[day]) return;
-            mealPlan[day].splice(index, 1);
-            renderMealPlanner();
-        }
+		async function removeMealFromDay(day, index) {
+			if (!mealPlan[day]) return;
+			mealPlan[day].splice(index, 1);
+			renderMealPlanner();
+			await saveMealPlanToSupabase(); // ✅ ADD THIS
+		}
 
         // ===================== Shopping List =====================
         
@@ -5239,14 +5315,14 @@ let pendingRecipeForMealPlan = null;
 
         // ===================== Initialize App =====================
         
-        (async function init() {
-            await initUser();
-            initCurrency();
-            refreshHeaderUser();
-            await loadPantryFromSupabase();  // ← ALSO ADD THIS LINE
-            renderMealPlanner();
-            await refreshRecipesFromSupabase();
-        })();
+		(async function init() {
+			await initUser();
+			initCurrency();
+			refreshHeaderUser();
+			await loadPantryFromSupabase();
+			await loadMealPlanFromSupabase(); // ✅ ADD THIS
+			await refreshRecipesFromSupabase();
+		})();
     </script>
 	<!-- Day Selector Modal for Meal Planning -->
     <div class="modal" id="daySelectorModal">
