@@ -3380,13 +3380,13 @@ function coalesceTime(total, prep, cook) {
 			} else {
 				currentUser = null;
 				localStorage.removeItem(CURRENT_USER_KEY);
-				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] }; // ✅ ADD THIS
+				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
 			}
 			refreshHeaderUser();
 			
 			await loadPantryFromSupabase();
-			await loadMealPlanFromSupabase(); // ✅ ADD THIS
-			await refreshRecipesFromSupabase();
+			await refreshRecipesFromSupabase();  // ✅ RECIPES FIRST
+			await loadMealPlanFromSupabase();     // ✅ MEAL PLAN SECOND
 		}
         async function initUser() {
             try {
