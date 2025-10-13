@@ -4375,13 +4375,11 @@ function coalesceTime(total, prep, cook) {
 			try {
 				const userId = cu.id;
 				
-				// Delete all existing meal plans for this user
 				await supaFetch('meal_plans', {
 					method: 'DELETE',
 					query: `user_id=eq.${userId}`
 				});
 				
-				// Insert current meal plan
 				const planEntries = [];
 				Object.entries(mealPlan).forEach(([day, recipes]) => {
 					recipes.forEach((recipeId, position) => {
@@ -4401,13 +4399,13 @@ function coalesceTime(total, prep, cook) {
 					});
 				}
 				
-				console.log('✅ Meal plan saved');
+				console.log('✅ Meal plan saved to database');
 				
 			} catch (e) {
 				console.error('⚠️ Failed to save meal plan:', e);
+				alert('⚠️ Failed to save meal plan: ' + e.message); // ✅ Show error to user
 			}
 		}
-
 
 		function renderPantry(searchTerm = '') {
 			const container = document.getElementById('pantryItems');
@@ -5320,8 +5318,9 @@ let pendingRecipeForMealPlan = null;
 			initCurrency();
 			refreshHeaderUser();
 			await loadPantryFromSupabase();
-			await loadMealPlanFromSupabase(); // ✅ ADD THIS
 			await refreshRecipesFromSupabase();
+			await loadMealPlanFromSupabase(); // ✅ ADD THIS
+
 		})();
     </script>
 	<!-- Day Selector Modal for Meal Planning -->
