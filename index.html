@@ -259,6 +259,17 @@
                     <button class="linklike" id="logoutBtn">Log out</button>
                 </div>
                 <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+				<select id="currencySelector" class="category-select" style="min-width: 80px; padding: 8px 10px;" onchange="changeCurrency(this.value)" title="Select Currency">
+				<option value="PHP">₱ PHP</option>
+				<option value="USD">$ USD</option>
+				<option value="EUR">€ EUR</option>
+				<option value="GBP">£ GBP</option>
+				<option value="CAD">$ CAD</option>
+				<option value="AUD">$ AUD</option>
+				<option value="JPY">¥ JPY</option>
+				<option value="INR">₹ INR</option>
+				<option value="MXN">$ MXN</option>
+				</select>
             </div>
         </header>
 
@@ -302,28 +313,57 @@
             <div class="recipe-grid" id="recipeGrid"></div>
         </div>
 
-        <div id="pantry" class="tab-content">
+		<div id="pantry" class="tab-content">
             <div class="pantry-section">
                 <h2>My Pantry Inventory</h2>
-                <div class="pantry-form">
-                    <input type="text" id="pantryItem" placeholder="Item name...">
-                    <input type="number" id="pantryAmount" placeholder="Amount">
+                
+                <!-- Search Bar -->
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="pantrySearch" placeholder="🔍 Search pantry items..." 
+                           style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);"
+                           oninput="filterPantryItems()">
+                </div>
+                
+                <div class="pantry-form" style="grid-template-columns: 2fr 1fr 1fr 1fr auto;">
+                    <input type="text" id="pantryItem" placeholder="Item name..." required>
+                    <input type="number" id="pantryAmount" placeholder="Amount" step="0.01" required>
                     <select id="pantryUnit">
-                        <option value="units">units</option>
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="L">L</option>
-                        <option value="ml">ml</option>
-                        <option value="cups">cups</option>
-                        <option value="tbsp">tbsp</option>
-                        <option value="tsp">tsp</option>
-                    </select>
+						<optgroup label="Count">
+							<option value="units">units</option>
+							<option value="ea">each (ea)</option>
+							<option value="piece">piece</option>
+							<option value="pcs">pcs</option>
+							<option value="dozen">dozen</option>
+							<option value="can">can</option>
+							<option value="box">box</option>
+							<option value="bag">bag</option>
+							<option value="bottle">bottle</option>
+							<option value="jar">jar</option>
+							<option value="pack">pack</option>
+						</optgroup>
+						<optgroup label="Weight">
+							<option value="kg">kg</option>
+							<option value="g">g</option>
+							<option value="lb">lb (pound)</option>
+							<option value="oz">oz (ounce)</option>
+						</optgroup>
+						<optgroup label="Volume">
+							<option value="L">L (liter)</option>
+							<option value="ml">ml</option>
+							<option value="cup">cup</option>
+							<option value="tbsp">tbsp</option>
+							<option value="tsp">tsp</option>
+							<option value="gal">gallon</option>
+							<option value="qt">quart</option>
+							<option value="pt">pint</option>
+						</optgroup>
+					</select>
+                    <input type="number" id="pantryPrice" placeholder="Price (required)" step="0.01" min="0" required>
                     <button class="btn" onclick="addPantryItem()">Add</button>
                 </div>
                 <div class="pantry-items" id="pantryItems"></div>
             </div>
         </div>
-
         <div id="planner" class="tab-content">
             <h2>Weekly Meal Planner</h2>
             <button class="print-btn no-print" onclick="printMealPlanner()">🖨️ Print Meal Plan</button>
@@ -565,7 +605,315 @@
         const SUPABASE_URL = 'https://aopdcjovyaogxctskyqe.supabase.co';
         const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvcGRjam92eWFvZ3hjdHNreXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MTQ5OTQsImV4cCI6MjA3NTQ5MDk5NH0.uNXmb-q2qizjks__9kmXaKD7SxeoW_ed1md6vSjS-gQ';
         const REST_URL = `${SUPABASE_URL}/rest/v1`;
+// ===================== Currency Configuration =====================
+		const CURRENCY_SYMBOLS = {
+			PHP: '₱',
+			USD: '$',
+			EUR: '€',
+			GBP: '£',
+			CAD: 'C$',
+			AUD: 'A$',
+			JPY: '¥',
+			INR: '₹',
+			MXN: 'MX$'
+		};
 
+		const CURRENCY_NAMES = {
+			PHP: 'Philippine Peso',
+			USD: 'US Dollar',
+			EUR: 'Euro',
+			GBP: 'British Pound',
+			CAD: 'Canadian Dollar',
+			AUD: 'Australian Dollar',
+			JPY: 'Japanese Yen',
+			INR: 'Indian Rupee',
+			MXN: 'Mexican Peso'
+		};
+
+		let currentCurrency = localStorage.getItem('nutriplan.currency') || 'PHP';
+
+		function getCurrencySymbol() {
+			return CURRENCY_SYMBOLS[currentCurrency] || '$';
+		}
+
+		function formatPrice(amount) {
+			if (typeof amount !== 'number' || !isFinite(amount)) {
+				return getCurrencySymbol() + '0.00';
+			}
+			
+			const symbol = getCurrencySymbol();
+			
+			// Japanese Yen doesn't use decimals
+			if (currentCurrency === 'JPY') {
+				return symbol + Math.round(amount).toLocaleString();
+			}
+			
+			return symbol + amount.toFixed(2);
+		}
+
+		function changeCurrency(newCurrency) {
+			if (!CURRENCY_SYMBOLS[newCurrency]) {
+				console.error('Invalid currency:', newCurrency);
+				return;
+			}
+			
+			currentCurrency = newCurrency;
+			localStorage.setItem('nutriplan.currency', newCurrency);
+			
+			// Update the selector
+			document.getElementById('currencySelector').value = newCurrency;
+			
+			// Refresh all displays
+			renderPantry();
+			renderRecipes();
+			updateShoppingList();
+			
+			// If recipe modal is open, refresh it
+			const modal = document.getElementById('recipeDetailsModal');
+			if (modal.classList.contains('active')) {
+				const titleEl = document.getElementById('rdmTitle');
+				const recipeName = titleEl?.textContent;
+				const recipe = recipes.find(r => r.name === recipeName);
+				if (recipe) {
+					closeRecipeModal();
+					setTimeout(() => openRecipeModal(recipe.id), 100);
+				}
+			}
+			
+			console.log(`✅ Currency changed to ${CURRENCY_NAMES[newCurrency]}`);
+		}
+
+		function initCurrency() {
+			const selector = document.getElementById('currencySelector');
+			if (selector) {
+				selector.value = currentCurrency;
+			}
+		}
+		
+		// ===================== COMPREHENSIVE UNIT CONVERSION SYSTEM =====================
+
+const UNIT_CONVERSION = {
+    base_units: { volume: "ml", mass: "g" },
+    
+    volume_to_ml: {
+        teaspoon: 4.93, tsp: 4.93, t: 4.93,
+        tablespoon: 14.79, tbsp: 14.79, T: 14.79, Tbl: 14.79,
+        fluid_ounce: 29.57, floz: 29.57, oz_fl: 29.57,
+        cup: 236.59, c: 236.59, cups: 236.59,
+        pint: 473.18, pt: 473.18,
+        quart: 946.35, qt: 946.35,
+        gallon: 3785.41, gal: 3785.41,
+        milliliter: 1, ml: 1,
+        liter: 1000, l: 1000, L: 1000,
+        dash: 0.62,
+        pinch: 0.31,
+        smidgen: 0.15,
+        tablespoon_metric: 15,
+        tablespoon_au: 20
+    },
+    
+    mass_to_g: {
+        ounce: 28.35, oz: 28.35,
+        pound: 453.592, lb: 453.592, lbs: 453.592,
+        gram: 1, g: 1,
+        kilogram: 1000, kg: 1000
+    },
+    
+    densities_g_per_us_cup: {
+        water: 240,
+        milk: 240,
+        milk_whole: 240,
+        heavy_cream: 240,
+        cream: 240,
+        all_purpose_flour: 120,
+        flour: 120,
+        bread_flour: 125,
+        cake_flour: 100,
+        whole_wheat_flour: 120,
+        granulated_sugar: 200,
+        sugar: 200,
+        brown_sugar_packed: 220,
+        brown_sugar: 220,
+        powdered_sugar: 120,
+        cocoa_powder_unsweetened: 85,
+        cocoa_powder: 85,
+        cocoa: 85,
+        rolled_oats: 90,
+        oats: 90,
+        long_grain_white_rice_raw: 188,
+        rice: 188,
+        honey: 340,
+        maple_syrup: 315,
+        syrup: 315,
+        peanut_butter: 265,
+        chocolate_chips_semi_sweet: 170,
+        chocolate_chips: 170,
+        chopped_nuts_mixed: 115,
+        nuts: 115,
+        olive_oil: 218,
+        oil: 218,
+        butter: 227
+    },
+    
+    non_convertible: [
+    "piece", "pcs", "slice", "wedge", "clove", "leaf", "sheet", "bunch", 
+    "sprig", "handful", "can", "bag", "package", "glass", "to_taste", 
+    "as_needed", "counted_item", "units", "unit", "ea", "each", "dozen",
+    "box", "bottle", "jar", "pack", "container"
+	]
+};
+
+function normalizeUnit(unit) {
+    if (!unit) return 'units';
+    const u = unit.toLowerCase().trim();
+    
+    // Check if it's in volume conversions
+    if (UNIT_CONVERSION.volume_to_ml[u]) return u;
+    
+    // Check if it's in mass conversions
+    if (UNIT_CONVERSION.mass_to_g[u]) return u;
+    
+    // Check if it's non-convertible
+    if (UNIT_CONVERSION.non_convertible.includes(u)) return 'units';
+    
+    return u;
+}
+
+function convertUnits(amount, fromUnit, toUnit, ingredientName = '') {
+    if (!amount || amount === 0) return 0;
+    
+    fromUnit = normalizeUnit(fromUnit);
+    toUnit = normalizeUnit(toUnit);
+    
+    // Same unit - no conversion needed
+    if (fromUnit === toUnit) return amount;
+    
+    // Both non-convertible
+    if (fromUnit === 'units' || toUnit === 'units') return amount;
+    
+    const volFrom = UNIT_CONVERSION.volume_to_ml[fromUnit];
+    const volTo = UNIT_CONVERSION.volume_to_ml[toUnit];
+    const massFrom = UNIT_CONVERSION.mass_to_g[fromUnit];
+    const massTo = UNIT_CONVERSION.mass_to_g[toUnit];
+    
+    // Volume to Volume
+    if (volFrom && volTo) {
+        const ml = amount * volFrom;
+        return ml / volTo;
+    }
+    
+    // Mass to Mass
+    if (massFrom && massTo) {
+        const grams = amount * massFrom;
+        return grams / massTo;
+    }
+    
+    // Volume to Mass (needs density)
+    if (volFrom && massTo && ingredientName) {
+        const ingredientKey = ingredientName.toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
+            .replace(/_+/g, '_');
+        
+        let density = UNIT_CONVERSION.densities_g_per_us_cup[ingredientKey];
+        
+        // Try partial matches
+        if (!density) {
+            for (const [key, val] of Object.entries(UNIT_CONVERSION.densities_g_per_us_cup)) {
+                if (ingredientKey.includes(key) || key.includes(ingredientKey)) {
+                    density = val;
+                    break;
+                }
+            }
+        }
+        
+        if (density) {
+            const ml = amount * volFrom;
+            const cups = ml / UNIT_CONVERSION.volume_to_ml.cup;
+            const grams = cups * density;
+            return grams / massTo;
+        }
+    }
+    
+    // Mass to Volume (needs density)
+    if (massFrom && volTo && ingredientName) {
+        const ingredientKey = ingredientName.toLowerCase()
+            .replace(/[^a-z0-9_]/g, '_')
+            .replace(/_+/g, '_');
+        
+        let density = UNIT_CONVERSION.densities_g_per_us_cup[ingredientKey];
+        
+        if (!density) {
+            for (const [key, val] of Object.entries(UNIT_CONVERSION.densities_g_per_us_cup)) {
+                if (ingredientKey.includes(key) || key.includes(ingredientKey)) {
+                    density = val;
+                    break;
+                }
+            }
+        }
+        
+        if (density) {
+            const grams = amount * massFrom;
+            const cups = grams / density;
+            const ml = cups * UNIT_CONVERSION.volume_to_ml.cup;
+            return ml / volTo;
+        }
+    }
+    
+    // Can't convert - return original amount
+    console.warn(`Cannot convert ${fromUnit} to ${toUnit} for ${ingredientName}`);
+    return amount;
+}
+
+// ===================== RECIPE COST CALCULATION =====================
+
+function calculateRecipeCost(recipe) {
+    if (!recipe || !Array.isArray(recipe.ingredients)) {
+        return { total: 0, breakdown: [], missingItems: [] };
+    }
+    
+    let totalCost = 0;
+    const breakdown = [];
+    const missingItems = [];
+    
+    recipe.ingredients.forEach(ing => {
+        const itemName = (ing.item || '').toLowerCase().trim();
+        if (!itemName) return;
+        
+        // Find matching pantry item (case-insensitive)
+        const pantryItem = pantry.find(p => p.item.toLowerCase() === itemName);
+        
+        if (!pantryItem || !pantryItem.price) {
+            missingItems.push(itemName);
+            return;
+        }
+        
+        // Calculate cost using advanced unit conversion
+        const recipeAmount = parseFloat(ing.amount) || 0;
+        const recipeUnit = normalizeUnit(ing.unit || '');
+        const pantryUnit = normalizeUnit(pantryItem.unit);
+        
+        // Convert recipe amount to pantry units
+        const convertedAmount = convertUnits(recipeAmount, recipeUnit, pantryUnit, itemName);
+        
+        // Calculate proportional cost
+        const pricePerUnit = pantryItem.price / pantryItem.amount;
+        const ingredientCost = convertedAmount * pricePerUnit;
+        
+        totalCost += ingredientCost;
+        breakdown.push({
+            item: ing.item,
+            amount: recipeAmount,
+            unit: recipeUnit,
+            cost: ingredientCost
+        });
+    });
+    
+    return {
+        total: totalCost,
+        breakdown: breakdown,
+        missingItems: missingItems
+    };
+}
         // ===================== Helper Functions =====================
         async function uploadRecipeImage(file) {
             if (!file) throw new Error('No file provided');
@@ -2576,19 +2924,23 @@ function coalesceTime(total, prep, cook) {
             return currentUser;
         }
 
-        async function setCurrentUser(username) {
-            if (username) {
-                currentUser = await loadUserFromSupabase(username);
-                if (currentUser) {
-                    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ username: currentUser.username }));
-                }
-            } else {
-                currentUser = null;
-                localStorage.removeItem(CURRENT_USER_KEY);
-            }
-            refreshHeaderUser();
-            await refreshRecipesFromSupabase();
-        }
+		async function setCurrentUser(username) {
+			if (username) {
+				currentUser = await loadUserFromSupabase(username);
+				if (currentUser) {
+					localStorage.setItem(CURRENT_USER_KEY, JSON.stringify({ username: currentUser.username }));
+				}
+			} else {
+				currentUser = null;
+				localStorage.removeItem(CURRENT_USER_KEY);
+			}
+			refreshHeaderUser();
+			
+			// Load user-specific pantry
+			await loadPantryFromSupabase();
+			
+			await refreshRecipesFromSupabase();
+		}
 
         async function initUser() {
             try {
@@ -2624,16 +2976,12 @@ function coalesceTime(total, prep, cook) {
             else if (tabName === 'approval') renderApprovalGrid();
         }
 
-        // ===================== Recipe Data =====================
-        let recipes = [];
-        let pantry = [
-            { item: "spaghetti", amount: 200, unit: "g" },
-            { item: "eggs", amount: 6, unit: "units" },
-            { item: "olive oil", amount: 500, unit: "ml" },
-            { item: "rice", amount: 1, unit: "kg" }
-        ];
-        let mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
-        let editingRecipeId = null;
+		// ===================== Recipe Data =====================
+		let recipes = [];
+		let pantry = []; // ← Changed from hardcoded array to empty array
+		let mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
+		let editingRecipeId = null;
+		let editingPantryIndex = null; // ← Added this line
 		function rowToRecipe(r) {
 		  // Use DB category if present; otherwise derive from NAME ONLY
 		  const safeCategory = r.category
@@ -2859,7 +3207,47 @@ function coalesceTime(total, prep, cook) {
 						`}
 					</div>
 				</div>
+				</div>
 				
+				<!-- COST SECTION (NEW!) -->
+				<div style="background: linear-gradient(135deg, var(--accent), var(--accent-hover)); padding: 15px; border-radius: 8px; margin-bottom: 15px; color: white;">
+					${(() => {
+						const costInfo = calculateRecipeCost(r);
+						const perServing = costInfo.total / (r.servings || 1);
+						
+						if (costInfo.missingItems.length === r.ingredients.length) {
+							return `
+								<div style="display: flex; align-items: center; gap: 10px;">
+									<span style="font-size: 1.5em;">💰</span>
+									<div>
+										<div style="font-weight: 600; font-size: 1.1em;">Cost: Not Available</div>
+										<div style="font-size: 0.85em; opacity: 0.9;">Add ingredient prices in Pantry to see cost</div>
+									</div>
+								</div>
+							`;
+						}
+						
+						return `
+							<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+								<div>
+									<div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 3px;">Estimated Total Cost</div>
+									<div style="font-size: 1.8em; font-weight: 700;">${formatPrice(costInfo.total)}</div>
+									<div style="font-size: 0.9em; opacity: 0.9; margin-top: 3px;">
+										${formatPrice(perServing)} per serving
+									</div>
+								</div>
+								${costInfo.missingItems.length > 0 ? `
+									<div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 6px; font-size: 0.85em;">
+										<div style="font-weight: 600; margin-bottom: 3px;">⚠️ Missing prices for:</div>
+										<div style="opacity: 0.9;">${costInfo.missingItems.slice(0, 3).join(', ')}${costInfo.missingItems.length > 3 ? '...' : ''}</div>
+									</div>
+								` : ''}
+							</div>
+						`;
+					})()}
+				</div>
+				
+				<h3 style="margin:8px 0 6px;">Ingredients</h3>
 				<h3 style="margin:8px 0 6px;">Ingredients</h3>
 				<ul class="ingredients-list" style="max-height:220px;overflow:auto;">${ing || '<li>No ingredients recorded.</li>'}</ul>
 				<h3 style="margin:10px 0 6px;">Instructions</h3>
@@ -2918,7 +3306,22 @@ function coalesceTime(total, prep, cook) {
 							</div>
 						</div>
 						<div class="recipe-category">${recipe.category}</div>
-						
+						<!-- COST DISPLAY -->
+						${(() => {
+							const costInfo = calculateRecipeCost(recipe);
+							if (costInfo.total > 0) {
+								const perServing = costInfo.total / (recipe.servings || 1);
+								return `
+									<div style="background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: white; padding: 8px 12px; border-radius: 6px; margin: 8px 0; font-size: 0.9em;">
+										<div style="display: flex; justify-content: space-between; align-items: center;">
+											<span style="font-weight: 600;">💰 ${formatPrice(costInfo.total)}</span>
+											<span style="opacity: 0.9;">${formatPrice(perServing)}/serving</span>
+										</div>
+									</div>
+								`;
+							}
+							return '';
+						})()}
 						<!-- RATING DISPLAY -->
 						<div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
 							${renderStarRating(recipe.averageRating || 0, false)}
@@ -3442,38 +3845,264 @@ function coalesceTime(total, prep, cook) {
         }
 
         // ===================== Pantry =====================
-        
-        function renderPantry() {
-            const container = document.getElementById('pantryItems');
-            container.innerHTML = pantry.map((item, index) => `
-                <div class="pantry-item ${item.amount < 100 && item.unit === 'g' ? 'low-stock' : ''}">
-                    <div>${item.item}</div>
-                    <div>${item.amount}</div>
-                    <div>${item.unit}</div>
-                    <button class="btn btn-danger" onclick="removePantryItem(${index})">Remove</button>
-                </div>`).join('');
-        }
 
-        function addPantryItem() {
-            const item = document.getElementById('pantryItem').value.trim();
-            const amount = parseFloat(document.getElementById('pantryAmount').value);
-            const unit = document.getElementById('pantryUnit').value;
-            if (!item || !amount) {
-                alert('Please fill in all fields');
-                return;
-            }
-            const existing = pantry.find(p => p.item.toLowerCase() === item.toLowerCase());
-            if (existing) existing.amount += amount;
-            else pantry.push({ item, amount, unit });
-            document.getElementById('pantryItem').value = '';
-            document.getElementById('pantryAmount').value = '';
-            renderPantry();
-        }
+		async function loadPantryFromSupabase() {
+			const cu = getCurrentUser();
+			if (!cu) {
+				pantry = [];
+				renderPantry();
+				return;
+			}
+			
+			try {
+				const userId = cu.id;
+				const items = await supaFetch('pantry', {
+					method: 'GET',
+					query: `user_id=eq.${userId}&order=item.asc`
+				});
+				
+				pantry = items.map(row => ({
+					id: row.id,
+					item: row.item,
+					amount: parseFloat(row.amount),
+					unit: row.unit,
+					price: parseFloat(row.price)
+				}));
+				
+				console.log(`✅ Loaded ${pantry.length} pantry items`);
+				renderPantry();
+				
+			} catch (e) {
+				console.error('❌ Failed to load pantry:', e);
+				pantry = [];
+				renderPantry();
+			}
+		}
 
-        function removePantryItem(index) {
-            pantry.splice(index, 1);
-            renderPantry();
-        }
+		function renderPantry(searchTerm = '') {
+			const container = document.getElementById('pantryItems');
+			
+			// Filter pantry items by search term
+			let displayItems = pantry;
+			if (searchTerm) {
+				displayItems = pantry.filter(item => 
+					item.item.toLowerCase().includes(searchTerm.toLowerCase())
+				);
+			}
+			
+			const cu = getCurrentUser();
+			
+			if (!cu) {
+				container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">🔒 Please log in to manage your pantry</div>';
+				return;
+			}
+			
+			if (pantry.length === 0) {
+				container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No items in pantry. Add some ingredients above!</div>';
+				return;
+			}
+			
+			if (displayItems.length === 0) {
+				container.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No items found matching "${searchTerm}"</div>`;
+				return;
+			}
+			
+			// Calculate total pantry value
+			const totalValue = pantry.reduce((sum, item) => sum + (item.amount * (item.price || 0)), 0);
+			
+			container.innerHTML = `
+				<div style="background: var(--accent); color: white; padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+					<span style="font-weight: 600;">💰 Total Pantry Value:</span>
+					<span style="font-size: 1.2em; font-weight: 700;">${formatPrice(totalValue)}</span>
+				</div>
+				${searchTerm ? `<div style="padding: 8px 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 10px; font-size: 0.9em;">Showing ${displayItems.length} of ${pantry.length} items</div>` : ''}
+				${displayItems.map((item) => {
+					const itemValue = item.amount * (item.price || 0);
+					const isLowStock = item.amount < 100 && item.unit === 'g';
+					
+					return `
+						<div class="pantry-item ${isLowStock ? 'low-stock' : ''}" style="grid-template-columns: 2fr 1fr 1fr 1fr auto auto;">
+							<div style="font-weight: 500;">${item.item}</div>
+							<div>${item.amount}</div>
+							<div>${item.unit}</div>
+							<div style="color: var(--accent); font-weight: 600;">${formatPrice(item.price || 0)}</div>
+							<button class="btn btn-secondary btn-small" onclick="editPantryItem('${item.id}')" title="Edit item">✏️</button>
+							<button class="btn btn-danger btn-small" onclick="removePantryItem('${item.id}')">Remove</button>
+						</div>
+					`;
+				}).join('')}
+			`;
+		}
+
+		async function addPantryItem() {
+			const cu = getCurrentUser();
+			if (!cu) {
+				alert('❌ Please log in to manage your pantry');
+				return;
+			}
+			
+			const item = document.getElementById('pantryItem').value.trim().toLowerCase();
+			const amount = parseFloat(document.getElementById('pantryAmount').value);
+			const unit = document.getElementById('pantryUnit').value;
+			const price = parseFloat(document.getElementById('pantryPrice').value);
+			
+			if (!item || !amount || amount <= 0) {
+				alert('❌ Please enter item name and a valid amount');
+				return;
+			}
+			
+			if (!price || price < 0) {
+				alert('❌ Price is required and must be 0 or greater');
+				return;
+			}
+			
+			try {
+				const userId = cu.id;
+				
+				// Check if item already exists (case-insensitive)
+				const existing = pantry.find(p => p.item.toLowerCase() === item);
+				
+				if (existing) {
+					const addMore = confirm(`"${existing.item}" already exists in pantry.\n\nCurrent: ${existing.amount} ${existing.unit} @ ${formatPrice(existing.price)}\n\nDo you want to add more quantity?\n\n✅ Yes - Add to existing\n❌ No - Cancel`);
+					
+					if (!addMore) return;
+					
+					// Weighted average price calculation
+					const totalValue = (existing.amount * existing.price) + (amount * price);
+					const totalAmount = existing.amount + amount;
+					const avgPrice = totalValue / totalAmount;
+					
+					// Update existing item in database
+					await supaFetch('pantry', {
+						method: 'PATCH',
+						query: `id=eq.${existing.id}`,
+						body: {
+							amount: totalAmount,
+							unit: unit,
+							price: avgPrice
+						}
+					});
+					
+					console.log('✅ Pantry item updated:', item);
+					
+				} else {
+					// Add new item to database
+					await supaFetch('pantry', {
+						method: 'POST',
+						body: {
+							user_id: userId,
+							item: item,
+							amount: amount,
+							unit: unit,
+							price: price
+						}
+					});
+					
+					console.log('✅ Pantry item added:', item);
+				}
+				
+				// Clear form
+				document.getElementById('pantryItem').value = '';
+				document.getElementById('pantryAmount').value = '';
+				document.getElementById('pantryPrice').value = '';
+				document.getElementById('pantrySearch').value = '';
+				editingPantryIndex = null;
+				
+				// Reload pantry from database
+				await loadPantryFromSupabase();
+				
+				alert(existing ? '✅ Pantry item updated!' : '✅ Item added to pantry!');
+				
+			} catch (e) {
+				console.error('❌ Failed to add/update pantry item:', e);
+				
+				// Check for unique constraint violation
+				if (e.message.includes('duplicate') || e.message.includes('unique')) {
+					alert('❌ This item already exists. Try editing it instead.');
+				} else {
+					alert('❌ Failed to save pantry item: ' + e.message);
+				}
+			}
+		}
+
+		function filterPantryItems() {
+			const searchTerm = document.getElementById('pantrySearch').value.toLowerCase();
+			renderPantry(searchTerm);
+		}
+
+		function editPantryItem(itemId) {
+			const item = pantry.find(p => p.id === itemId);
+			if (!item) return;
+			
+			editingPantryIndex = itemId;
+			
+			document.getElementById('pantryItem').value = item.item;
+			document.getElementById('pantryAmount').value = item.amount;
+			document.getElementById('pantryUnit').value = item.unit;
+			document.getElementById('pantryPrice').value = item.price;
+			
+			// Change button text to indicate editing
+			const addBtn = document.querySelector('.pantry-form .btn');
+			addBtn.textContent = 'Update';
+			addBtn.style.background = 'var(--warning)';
+			
+			// Add cancel button
+			if (!document.getElementById('cancelPantryEdit')) {
+				const cancelBtn = document.createElement('button');
+				cancelBtn.id = 'cancelPantryEdit';
+				cancelBtn.className = 'btn btn-secondary';
+				cancelBtn.textContent = 'Cancel';
+				cancelBtn.onclick = cancelPantryEdit;
+				addBtn.parentElement.appendChild(cancelBtn);
+			}
+			
+			// Scroll to form
+			document.getElementById('pantryItem').scrollIntoView({ behavior: 'smooth', block: 'center' });
+			document.getElementById('pantryItem').focus();
+		}
+
+		function cancelPantryEdit() {
+			editingPantryIndex = null;
+			document.getElementById('pantryItem').value = '';
+			document.getElementById('pantryAmount').value = '';
+			document.getElementById('pantryPrice').value = '';
+			
+			const addBtn = document.querySelector('.pantry-form .btn');
+			addBtn.textContent = 'Add';
+			addBtn.style.background = '';
+			
+			const cancelBtn = document.getElementById('cancelPantryEdit');
+			if (cancelBtn) cancelBtn.remove();
+		}
+
+		async function removePantryItem(itemId) {
+			const cu = getCurrentUser();
+			if (!cu) {
+				alert('❌ Please log in to manage your pantry');
+				return;
+			}
+			
+			const item = pantry.find(p => p.id === itemId);
+			if (!item) return;
+			
+			if (!confirm(`Remove "${item.item}" from pantry?`)) return;
+			
+			try {
+				await supaFetch('pantry', {
+					method: 'DELETE',
+					query: `id=eq.${itemId}`
+				});
+				
+				console.log('✅ Pantry item removed:', item.item);
+				
+				// Reload pantry from database
+				await loadPantryFromSupabase();
+				
+			} catch (e) {
+				console.error('❌ Failed to remove pantry item:', e);
+				alert('❌ Failed to remove item: ' + e.message);
+			}
+		}
 
         // ===================== Meal Planner =====================
         
@@ -3939,14 +4568,15 @@ let pendingRecipeForMealPlan = null;
         });
 
         // ===================== Initialize App =====================
-        
-        (async function init() {
-            await initUser();
-            refreshHeaderUser();
-            renderPantry();
-            renderMealPlanner();
-            await refreshRecipesFromSupabase();
-        })();
+
+		(async function init() {
+			await initUser();
+			initCurrency();
+			refreshHeaderUser();
+			await loadPantryFromSupabase();  // ← ADD THIS LINE
+			renderMealPlanner();
+			await refreshRecipesFromSupabase();
+		})();
     </script>
 	<!-- Day Selector Modal for Meal Planning -->
     <div class="modal" id="daySelectorModal">
