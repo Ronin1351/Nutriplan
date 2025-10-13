@@ -4490,7 +4490,7 @@ function coalesceTime(total, prep, cook) {
 		async function addPantryItem() {
 			const cu = getCurrentUser();
 			if (!cu) {
-				alert('❌ Please log in to manage your pantry');
+				alert('⚠️ Please log in to manage your pantry');
 				return;
 			}
 			
@@ -4502,58 +4502,29 @@ function coalesceTime(total, prep, cook) {
 			const category = document.getElementById('pantryCategory').value;
 			
 			if (!item) {
-				alert('❌ Please enter item name');
+				alert('⚠️ Please enter item name');
 				return;
 			}
 			
 			if (!amount || amount <= 0) {
-				alert('❌ Please enter a valid amount greater than 0');
+				alert('⚠️ Please enter a valid amount greater than 0');
 				return;
 			}
 			
 			if (!price || price < 0) {
-				alert('❌ Price is required and must be 0 or greater');
+				alert('⚠️ Price is required and must be 0 or greater');
 				return;
 			}
 			
 			try {
 				const userId = cu.id;
 				
-				// Check if item already exists (case-insensitive)
-				const existing = pantry.find(p => p.item.toLowerCase() === item);
-				
-				if (existing) {
-					const addMore = confirm(`"${existing.item}" already exists in pantry.\n\nCurrent: ${existing.amount} ${existing.unit} @ ${formatPrice(existing.price)}\n\nDo you want to add more quantity?\n\n✅ Yes - Add to existing\n❌ No - Cancel`);
-					
-					if (!addMore) return;
-					
-					// Weighted average price calculation
-					const totalValue = (existing.amount * existing.price) + (amount * price);
-					const totalAmount = existing.amount + amount;
-					const avgPrice = totalValue / totalAmount;
-					
-					// Update existing item in database
+				// ✅ EDITING MODE - Update existing item by ID
+				if (editingPantryIndex) {
 					await supaFetch('pantry', {
 						method: 'PATCH',
-						query: `id=eq.${existing.id}`,
+						query: `id=eq.${editingPantryIndex}`,
 						body: {
-							amount: totalAmount,
-							unit: unit,
-							price: avgPrice,
-							expiration_date: expiration,
-							category: category,
-							is_active: true
-						}
-					});
-					
-					console.log('✅ Pantry item updated:', item);
-					
-				} else {
-					// Add new item to database
-					await supaFetch('pantry', {
-						method: 'POST',
-						body: {
-							user_id: userId,
 							item: item,
 							amount: amount,
 							unit: unit,
@@ -4564,10 +4535,79 @@ function coalesceTime(total, prep, cook) {
 						}
 					});
 					
-					console.log('✅ Pantry item added:', item);
+					console.log('✅ Pantry item updated:', item);
+					alert('✅ Pantry item updated!');
+					
+				} else {
+					// ✅ ADD MODE - Check for duplicates
+					const existing = pantry.find(p => p.item.toLowerCase() === item);
+					
+					if (existing) {
+						const addMore = confirm(`"${existing.item}" already exists in pantry.\n\nCurrent: ${existing.amount} ${existing.unit} @ ${formatPrice(existing.price)}\n\nDo you want to add more quantity?\n\n✅ Yes - Add to existing\n❌ No - Cancel`);
+						
+						if (!addMore) return;
+						
+						// Check unit compatibility
+						if (existing.unit !== unit) {
+							const confirmMismatch = confirm(
+								`Unit mismatch detected!\n\n` +
+								`Existing: ${existing.amount} ${existing.unit}\n` +
+								`Adding: ${amount} ${unit}\n\n` +
+								`Convert and combine? (Cancel to keep separate)`
+							);
+							
+							if (!confirmMismatch) return;
+							
+							// Convert new amount to existing unit
+							const convertedAmount = convertUnits(amount, unit, existing.unit, item);
+							amount = convertedAmount;
+							unit = existing.unit;
+						}
+						
+						// Weighted average price calculation
+						const totalValue = (existing.amount * existing.price) + (amount * price);
+						const totalAmount = existing.amount + amount;
+						const avgPrice = totalValue / totalAmount;
+						
+						// Update existing item in database
+						await supaFetch('pantry', {
+							method: 'PATCH',
+							query: `id=eq.${existing.id}`,
+							body: {
+								amount: totalAmount,
+								unit: unit,
+								price: avgPrice,
+								expiration_date: expiration,
+								category: category,
+								is_active: true
+							}
+						});
+						
+						console.log('✅ Pantry item updated with new quantity:', item);
+						
+					} else {
+						// Add completely new item to database
+						await supaFetch('pantry', {
+							method: 'POST',
+							body: {
+								user_id: userId,
+								item: item,
+								amount: amount,
+								unit: unit,
+								price: price,
+								expiration_date: expiration,
+								category: category,
+								is_active: true
+							}
+						});
+						
+						console.log('✅ Pantry item added:', item);
+					}
+					
+					alert(existing ? '✅ Pantry item updated!' : '✅ Item added to pantry!');
 				}
 				
-				// Clear form
+				// Clear form and reset edit mode
 				document.getElementById('pantryItem').value = '';
 				document.getElementById('pantryAmount').value = '';
 				document.getElementById('pantryPrice').value = '';
@@ -4579,15 +4619,13 @@ function coalesceTime(total, prep, cook) {
 				// Reload pantry from database
 				await loadPantryFromSupabase();
 				
-				alert(existing ? '✅ Pantry item updated!' : '✅ Item added to pantry!');
-				
 			} catch (e) {
-				console.error('❌ Failed to add/update pantry item:', e);
+				console.error('⚠️ Failed to add/update pantry item:', e);
 				
 				if (e.message.includes('duplicate') || e.message.includes('unique')) {
-					alert('❌ This item already exists. Try editing it instead.');
+					alert('⚠️ This item already exists. Try editing it instead.');
 				} else {
-					alert('❌ Failed to save pantry item: ' + e.message);
+					alert('⚠️ Failed to save pantry item: ' + e.message);
 				}
 			}
 		}
