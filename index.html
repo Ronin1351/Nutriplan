@@ -734,15 +734,15 @@
 		<div id="pantry" class="tab-content">
             <div class="pantry-section">
                 <h2>My Pantry Inventory</h2>
-                
+
                 <!-- Search Bar -->
-<div style="margin-bottom: 15px; display: flex; gap: 10px;">
-    <input type="text" id="pantrySearch" placeholder="🔍 Search pantry items..." 
-           style="flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);"
-           oninput="filterPantryItems()">
-    <button class="btn btn-secondary" onclick="openReceiptScanner()">📄 Add From Receipt</button>
-</div>
-                
+                <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                    <input type="text" id="pantrySearch" placeholder="🔍 Search pantry items..."
+                           style="flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);"
+                           oninput="filterPantryItems()">
+                    <button class="btn btn-secondary" onclick="openReceiptScanner()">📄 Add From Receipt</button>
+                </div>
+
 					<div class="pantry-form" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto auto;">
 						<input type="text" id="pantryItem" placeholder="Item name..." required>
 						<input type="number" id="pantryAmount" placeholder="Amount" step="0.01" required>
@@ -1035,6 +1035,74 @@
             </div>
         </div>
     </div>
+
+    <!-- Receipt Scanner Modal -->
+    <div class="modal" id="receiptScannerModal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>📄 Scan Receipt</h2>
+                <button class="btn btn-secondary" onclick="closeReceiptScanner()">Close</button>
+            </div>
+
+            <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center;">
+                    <div>
+                        <label for="receiptUpload" class="upload-area" id="uploadArea"
+                               style="display: block; width: 100%; height: 200px; border: 2px dashed var(--border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; transition: all 0.3s;">
+                            <div style="font-size: 3em; margin-bottom: 10px;">📷</div>
+                            <div style="font-weight: 600; margin-bottom: 5px;">Click to upload receipt</div>
+                            <div style="color: var(--text-secondary); font-size: 0.9em;">or drag & drop image here</div>
+                            <div style="color: var(--text-secondary); font-size: 0.8em; margin-top: 5px;">PNG, JPG, WEBP</div>
+                        </label>
+                        <input type="file" id="receiptUpload" accept="image/*" style="display: none;" onchange="handleReceiptUpload(event)">
+                    </div>
+
+                    <div>
+                        <h3 style="margin-bottom: 10px;">Ready to Scan?</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 15px;">Upload a clear photo of your grocery receipt. Our AI will extract the items automatically.</p>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn" id="scanButton" onclick="scanReceipt()" disabled style="flex: 1;">Scan Receipt</button>
+                            <button class="btn btn-secondary" id="clearButton" onclick="clearReceiptScanner()" disabled>Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="scanningSpinner" style="display: none; text-align: center; padding: 40px;">
+                <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--border); border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;"></div>
+                <div style="font-weight: 600; margin-bottom: 5px;">Scanning your receipt...</div>
+                <div style="color: var(--text-secondary); font-size: 0.9em;">This may take a moment</div>
+            </div>
+
+            <!-- Error Message -->
+            <div id="scanError" style="display: none; background: #fee; border-left: 4px solid #f56565; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
+                <div style="font-weight: 600; color: #c53030;">Error:</div>
+                <div id="errorMessage" style="color: #742a2a;"></div>
+            </div>
+
+            <!-- Results -->
+            <div id="scanResults" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--border);">
+                    <h3 style="margin: 0;">Scanned Items</h3>
+                    <div style="text-align: right;">
+                        <div style="color: var(--text-secondary);">Total Items: <span id="totalItemsCount">0</span></div>
+                        <div style="font-weight: 600;">Receipt Total: <span id="receiptTotal" style="color: var(--accent);">$0.00</span></div>
+                    </div>
+                </div>
+
+                <div id="scannedItemsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; max-height: 400px; overflow-y: auto; padding: 10px 0;">
+                    <!-- Scanned items will be inserted here -->
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
+                    <button class="btn btn-secondary" onclick="closeReceiptScanner()">Cancel</button>
+                    <button class="btn" onclick="addScannedItemsToPantry()">Add to Pantry</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <input type="file" id="hiddenRecipeImageInput" accept="image/*" style="display:none">
 
     <script>
@@ -1682,75 +1750,7 @@ function openImportModal() {
 
       // If user pasted JSON-LD only, wrap into minimal HTML for parser
       const asHtml = htmlCandidate.startsWith('{') || htmlCandidate.startsWith('[')
-        ? `<html><head><script type="application/ld+json">${htmlCandidate}</script${''}>${baseHref ? `<base href="${baseHref}">` : ''}</head><body>
-<!-- Receipt Scanner Modal -->
-<div class="modal" id="receiptScannerModal">
-    <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2>📄 Scan Receipt</h2>
-            <button class="btn btn-secondary" onclick="closeReceiptScanner()">Close</button>
-        </div>
-
-        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center;">
-                <div>
-                    <label for="receiptUpload" class="upload-area" id="uploadArea" 
-                           style="display: block; width: 100%; height: 200px; border: 2px dashed var(--border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; transition: all 0.3s;">
-                        <div style="font-size: 3em; margin-bottom: 10px;">📷</div>
-                        <div style="font-weight: 600; margin-bottom: 5px;">Click to upload receipt</div>
-                        <div style="color: var(--text-secondary); font-size: 0.9em;">or drag & drop image here</div>
-                        <div style="color: var(--text-secondary); font-size: 0.8em; margin-top: 5px;">PNG, JPG, WEBP</div>
-                    </label>
-                    <input type="file" id="receiptUpload" accept="image/*" style="display: none;" onchange="handleReceiptUpload(event)">
-                </div>
-                
-                <div>
-                    <h3 style="margin-bottom: 10px;">Ready to Scan?</h3>
-                    <p style="color: var(--text-secondary); margin-bottom: 15px;">Upload a clear photo of your grocery receipt. Our AI will extract the items automatically.</p>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn" id="scanButton" onclick="scanReceipt()" disabled style="flex: 1;">Scan Receipt</button>
-                        <button class="btn btn-secondary" id="clearButton" onclick="clearReceiptScanner()" disabled>Clear</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Loading Spinner -->
-        <div id="scanningSpinner" style="display: none; text-align: center; padding: 40px;">
-            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--border); border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;"></div>
-            <div style="font-weight: 600; margin-bottom: 5px;">Scanning your receipt...</div>
-            <div style="color: var(--text-secondary); font-size: 0.9em;">This may take a moment</div>
-        </div>
-
-        <!-- Error Message -->
-        <div id="scanError" style="display: none; background: #fee; border-left: 4px solid #f56565; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
-            <div style="font-weight: 600; color: #c53030;">Error:</div>
-            <div id="errorMessage" style="color: #742a2a;"></div>
-        </div>
-
-        <!-- Results -->
-        <div id="scanResults" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--border);">
-                <h3 style="margin: 0;">Scanned Items</h3>
-                <div style="text-align: right;">
-                    <div style="color: var(--text-secondary);">Total Items: <span id="totalItemsCount">0</span></div>
-                    <div style="font-weight: 600;">Receipt Total: <span id="receiptTotal" style="color: var(--accent);">$0.00</span></div>
-                </div>
-            </div>
-
-            <div id="scannedItemsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; max-height: 400px; overflow-y: auto; padding: 10px 0;">
-                <!-- Scanned items will be inserted here -->
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
-                <button class="btn btn-secondary" onclick="closeReceiptScanner()">Cancel</button>
-                <button class="btn" onclick="addScannedItemsToPantry()">Add to Pantry</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-</body></html>`
+        ? `<html><head><script type="application/ld+json">${htmlCandidate}</script${''}>${baseHref ? `<base href="${baseHref}">` : ''}</head><body></body></html>`
         : htmlCandidate;
 
       const _htmlToDocument = (typeof htmlToDocument === 'function')
