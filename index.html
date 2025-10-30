@@ -588,7 +588,78 @@
 .tab.active {
     box-shadow: 0 2px 6px rgba(76, 175, 80, 0.4);
 }
-    </style>
+    
+/* Receipt Scanner Modal Styles */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.upload-area:hover {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+.scanned-item-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s;
+}
+
+.scanned-item-card:hover {
+    box-shadow: 0 4px 12px var(--shadow);
+    transform: translateY(-2px);
+}
+
+.scanned-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.scanned-item-name {
+    font-weight: 600;
+    font-size: 1.1em;
+    margin: 0;
+    flex: 1;
+    margin-right: 10px;
+}
+
+.scanned-item-category {
+    background: var(--accent);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.scanned-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.scanned-item-detail {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9em;
+}
+
+.scanned-item-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.scanned-item-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+</style>
 </head>
 <body>
     <div class="container">
@@ -665,11 +736,12 @@
                 <h2>My Pantry Inventory</h2>
                 
                 <!-- Search Bar -->
-                <div style="margin-bottom: 15px;">
-                    <input type="text" id="pantrySearch" placeholder="🔍 Search pantry items..." 
-                           style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);"
-                           oninput="filterPantryItems()">
-                </div>
+<div style="margin-bottom: 15px; display: flex; gap: 10px;">
+    <input type="text" id="pantrySearch" placeholder="🔍 Search pantry items..." 
+           style="flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);"
+           oninput="filterPantryItems()">
+    <button class="btn btn-secondary" onclick="openReceiptScanner()">📄 Add From Receipt</button>
+</div>
                 
 					<div class="pantry-form" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto auto;">
 						<input type="text" id="pantryItem" placeholder="Item name..." required>
@@ -1610,7 +1682,75 @@ function openImportModal() {
 
       // If user pasted JSON-LD only, wrap into minimal HTML for parser
       const asHtml = htmlCandidate.startsWith('{') || htmlCandidate.startsWith('[')
-        ? `<html><head><script type="application/ld+json">${htmlCandidate}</script${''}>${baseHref ? `<base href="${baseHref}">` : ''}</head><body></body></html>`
+        ? `<html><head><script type="application/ld+json">${htmlCandidate}</script${''}>${baseHref ? `<base href="${baseHref}">` : ''}</head><body>
+<!-- Receipt Scanner Modal -->
+<div class="modal" id="receiptScannerModal">
+    <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>📄 Scan Receipt</h2>
+            <button class="btn btn-secondary" onclick="closeReceiptScanner()">Close</button>
+        </div>
+
+        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center;">
+                <div>
+                    <label for="receiptUpload" class="upload-area" id="uploadArea" 
+                           style="display: block; width: 100%; height: 200px; border: 2px dashed var(--border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; transition: all 0.3s;">
+                        <div style="font-size: 3em; margin-bottom: 10px;">📷</div>
+                        <div style="font-weight: 600; margin-bottom: 5px;">Click to upload receipt</div>
+                        <div style="color: var(--text-secondary); font-size: 0.9em;">or drag & drop image here</div>
+                        <div style="color: var(--text-secondary); font-size: 0.8em; margin-top: 5px;">PNG, JPG, WEBP</div>
+                    </label>
+                    <input type="file" id="receiptUpload" accept="image/*" style="display: none;" onchange="handleReceiptUpload(event)">
+                </div>
+                
+                <div>
+                    <h3 style="margin-bottom: 10px;">Ready to Scan?</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">Upload a clear photo of your grocery receipt. Our AI will extract the items automatically.</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" id="scanButton" onclick="scanReceipt()" disabled style="flex: 1;">Scan Receipt</button>
+                        <button class="btn btn-secondary" id="clearButton" onclick="clearReceiptScanner()" disabled>Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="scanningSpinner" style="display: none; text-align: center; padding: 40px;">
+            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--border); border-top: 4px solid var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;"></div>
+            <div style="font-weight: 600; margin-bottom: 5px;">Scanning your receipt...</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">This may take a moment</div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="scanError" style="display: none; background: #fee; border-left: 4px solid #f56565; padding: 15px; margin-bottom: 15px; border-radius: 4px;">
+            <div style="font-weight: 600; color: #c53030;">Error:</div>
+            <div id="errorMessage" style="color: #742a2a;"></div>
+        </div>
+
+        <!-- Results -->
+        <div id="scanResults" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--border);">
+                <h3 style="margin: 0;">Scanned Items</h3>
+                <div style="text-align: right;">
+                    <div style="color: var(--text-secondary);">Total Items: <span id="totalItemsCount">0</span></div>
+                    <div style="font-weight: 600;">Receipt Total: <span id="receiptTotal" style="color: var(--accent);">$0.00</span></div>
+                </div>
+            </div>
+
+            <div id="scannedItemsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; max-height: 400px; overflow-y: auto; padding: 10px 0;">
+                <!-- Scanned items will be inserted here -->
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
+                <button class="btn btn-secondary" onclick="closeReceiptScanner()">Cancel</button>
+                <button class="btn" onclick="addScannedItemsToPantry()">Add to Pantry</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body></html>`
         : htmlCandidate;
 
       const _htmlToDocument = (typeof htmlToDocument === 'function')
@@ -3380,13 +3520,13 @@ function coalesceTime(total, prep, cook) {
 			} else {
 				currentUser = null;
 				localStorage.removeItem(CURRENT_USER_KEY);
-				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] };
+				mealPlan = { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] }; // ✅ ADD THIS
 			}
 			refreshHeaderUser();
 			
 			await loadPantryFromSupabase();
-			await refreshRecipesFromSupabase();  // ✅ RECIPES FIRST
-			await loadMealPlanFromSupabase();     // ✅ MEAL PLAN SECOND
+			await loadMealPlanFromSupabase(); // ✅ ADD THIS
+			await refreshRecipesFromSupabase();
 		}
         async function initUser() {
             try {
@@ -5401,3 +5541,325 @@ let pendingRecipeForMealPlan = null;
     </style>
 </body>
 </html>
+<script>
+
+
+// ===================== RECEIPT SCANNER =====================
+
+// Receipt Scanner State
+let scannedReceiptItems = [];
+let currentReceiptFile = null;
+let receiptImagePreview = null;
+
+// Open receipt scanner modal
+function openReceiptScanner() {
+    const cu = (typeof getCurrentUser === 'function') ? getCurrentUser() : (window.currentUser || null);
+    if (!cu) {
+        alert('❌ Please log in to use receipt scanning');
+        return;
+    }
+    const modal = document.getElementById('receiptScannerModal');
+    if (modal) modal.classList.add('active');
+    clearReceiptScanner();
+}
+
+// Close receipt scanner modal
+function closeReceiptScanner() {
+    const modal = document.getElementById('receiptScannerModal');
+    if (modal) modal.classList.remove('active');
+    clearReceiptScanner();
+}
+
+// Handle receipt file upload
+function handleReceiptUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        showScanError('Please upload a valid image file (PNG, JPG, etc.).');
+        return;
+    }
+
+    currentReceiptFile = file;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        receiptImagePreview = e.target.result;
+        const uploadArea = document.getElementById('uploadArea');
+        if (uploadArea) {
+            uploadArea.innerHTML = `
+                <img src="${receiptImagePreview}" alt="Receipt preview" 
+                     style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 4px; margin-bottom: 10px;">
+                <div style="color: var(--accent); font-weight: 600;">Receipt ready to scan</div>
+                <div style="color: var(--text-secondary); font-size: 0.8em;">Click to change image</div>
+            `;
+        }
+    };
+    reader.readAsDataURL(file);
+
+    const scanBtn = document.getElementById('scanButton');
+    const clearBtn = document.getElementById('clearButton');
+    if (scanBtn) scanBtn.disabled = false;
+    if (clearBtn) clearBtn.disabled = false;
+    hideScanError();
+}
+
+// Clear receipt scanner
+function clearReceiptScanner() {
+    scannedReceiptItems = [];
+    currentReceiptFile = null;
+    receiptImagePreview = null;
+
+    const uploadArea = document.getElementById('uploadArea');
+    if (uploadArea) {
+        uploadArea.innerHTML = `
+            <div style="font-size: 3em; margin-bottom: 10px;">📷</div>
+            <div style="font-weight: 600; margin-bottom: 5px;">Click to upload receipt</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">or drag & drop image here</div>
+            <div style="color: var(--text-secondary); font-size: 0.8em; margin-top: 5px;">PNG, JPG, WEBP</div>
+        `;
+    }
+
+    const fileInput = document.getElementById('receiptUpload');
+    if (fileInput) fileInput.value = '';
+    const scanBtn = document.getElementById('scanButton');
+    const clearBtn = document.getElementById('clearButton');
+    if (scanBtn) scanBtn.disabled = true;
+    if (clearBtn) clearBtn.disabled = true;
+
+    const results = document.getElementById('scanResults');
+    const spinner = document.getElementById('scanningSpinner');
+    if (results) results.style.display = 'none';
+    if (spinner) spinner.style.display = 'none';
+    hideScanError();
+}
+
+// Show scan error
+function showScanError(message) {
+    const msg = document.getElementById('errorMessage');
+    const box = document.getElementById('scanError');
+    if (msg) msg.textContent = message;
+    if (box) box.style.display = 'block';
+}
+
+// Hide scan error
+function hideScanError() {
+    const box = document.getElementById('scanError');
+    if (box) box.style.display = 'none';
+}
+
+// Scan receipt (mock Gemini)
+async function scanReceipt() {
+    if (!currentReceiptFile) return;
+    const spinner = document.getElementById('scanningSpinner');
+    const scanBtn = document.getElementById('scanButton');
+    if (spinner) spinner.style.display = 'block';
+    if (scanBtn) scanBtn.disabled = true;
+    hideScanError();
+
+    try {
+        const base64Image = await fileToBase64(currentReceiptFile);
+        const items = await extractItemsFromReceipt(base64Image, currentReceiptFile.type);
+        scannedReceiptItems = items;
+        displayScanResults();
+    } catch (error) {
+        console.error('Scan failed:', error);
+        showScanError(error.message || 'Failed to scan receipt. Please try a different image.');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
+        if (scanBtn) scanBtn.disabled = false;
+    }
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function displayScanResults() {
+    const resultsContainer = document.getElementById('scanResults');
+    const itemsGrid = document.getElementById('scannedItemsGrid');
+    const totalItems = document.getElementById('totalItemsCount');
+    const receiptTotal = document.getElementById('receiptTotal');
+
+    if (!itemsGrid || !totalItems || !receiptTotal || !resultsContainer) return;
+
+    if (scannedReceiptItems.length === 0) {
+        itemsGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-secondary);">No items found in receipt</div>';
+    } else {
+        itemsGrid.innerHTML = scannedReceiptItems.map(item => `
+            <div class="scanned-item-card">
+                <div class="scanned-item-header">
+                    <div class="scanned-item-name">${escapeHtml(item.name)}</div>
+                    <div class="scanned-item-category">${escapeHtml(item.category || 'Uncategorized')}</div>
+                </div>
+                <div class="scanned-item-details">
+                    <div class="scanned-item-detail">
+                        <span class="scanned-item-label">Total Price:</span>
+                        <span class="scanned-item-value">${formatPrice(item.totalPrice)}</span>
+                    </div>
+                    ${item.weight ? `
+                    <div class="scanned-item-detail">
+                        <span class="scanned-item-label">Weight:</span>
+                        <span class="scanned-item-value">${escapeHtml(item.weight)}</span>
+                    </div>` : ''}
+                    ${item.pricePerUnit ? `
+                    <div class="scanned-item-detail">
+                        <span class="scanned-item-label">Price/Unit:</span>
+                        <span class="scanned-item-value">${escapeHtml(item.pricePerUnit)}</span>
+                    </div>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    totalItems.textContent = String(scannedReceiptItems.length);
+    const totalCost = scannedReceiptItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+    receiptTotal.textContent = formatPrice(totalCost);
+    resultsContainer.style.display = 'block';
+}
+
+async function addScannedItemsToPantry() {
+    const cu = (typeof getCurrentUser === 'function') ? getCurrentUser() : (window.currentUser || null);
+    if (!cu) {
+        alert('❌ Please log in to add items to pantry');
+        return;
+    }
+    if (scannedReceiptItems.length === 0) {
+        alert('❌ No items to add');
+        return;
+    }
+    try {
+        let addedCount = 0;
+        for (const item of scannedReceiptItems) {
+            const pantryItem = convertReceiptItemToPantryItem(item);
+            if (!pantryItem) continue;
+
+            const existingItem = (window.pantry || []).find(p => p.item.toLowerCase() == pantryItem.item.toLowerCase());
+            if (existingItem) {
+                const newAmount = (existingItem.amount || 0) + (pantryItem.amount || 0);
+                const totalValue = ((existingItem.amount || 0) * (existingItem.price || 0)) + ((pantryItem.amount || 0) * (pantryItem.price || 0));
+                const avgPrice = newAmount ? (totalValue / newAmount) : (existingItem.price || pantryItem.price);
+
+                await supaFetch('pantry', {
+                    method: 'PATCH',
+                    query: `id=eq.${existingItem.id}`,
+                    body: { amount: newAmount, price: avgPrice }
+                });
+            } else {
+                await supaFetch('pantry', {
+                    method: 'POST',
+                    body: {
+                        user_id: cu.id,
+                        item: pantryItem.item,
+                        amount: pantryItem.amount,
+                        unit: pantryItem.unit,
+                        price: pantryItem.price,
+                        category: pantryItem.category,
+                        is_active: true
+                    }
+                });
+            }
+            addedCount++;
+        }
+        await (window.loadPantryFromSupabase ? window.loadPantryFromSupabase() : Promise.resolve());
+        closeReceiptScanner();
+        alert(`✅ Successfully added ${addedCount} items to pantry!`);
+    } catch (error) {
+        console.error('Failed to add items:', error);
+        alert('❌ Failed to add some items to pantry: ' + (error?.message || String(error)));
+    }
+}
+
+function convertReceiptItemToPantryItem(receiptItem) {
+    if (!receiptItem?.name || typeof receiptItem.totalPrice !== 'number') return null;
+
+    let amount = 1;
+    let unit = 'units';
+    let price = receiptItem.totalPrice;
+
+    if (receiptItem.weight) {
+        const weightMatch = String(receiptItem.weight).match(/(\d+(?:\.\d+)?)\s*(lb|lbs|kg|g|oz)/i);
+        if (weightMatch) {
+            amount = parseFloat(weightMatch[1]);
+            unit = weightMatch[2].toLowerCase();
+            if (unit === 'lbs') unit = 'lb';
+        }
+    }
+
+    if (receiptItem.pricePerUnit) {
+        const priceMatch = String(receiptItem.pricePerUnit).match(/\$?(\d+(?:\.\d+)?)/);
+        if (priceMatch) price = parseFloat(priceMatch[1]);
+    }
+
+    const categoryMap = {
+        'Produce': 'Produce',
+        'Dairy': 'Dairy',
+        'Meat': 'Meat',
+        'Pantry': 'Canned',
+        'Snacks': 'Snacks',
+        'Beverages': 'Beverages',
+        'Household': 'Uncategorized'
+    };
+    const category = categoryMap[receiptItem.category] || 'Uncategorized';
+
+    return { item: receiptItem.name, amount, unit, price, category };
+}
+
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Mock Gemini API - replace with real call
+async function extractItemsFromReceipt(base64Image, mimeType) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve([
+                { name: "Organic Bananas", weight: "1.5 lbs", pricePerUnit: "$0.69/lb", totalPrice: 1.04, category: "Produce" },
+                { name: "Whole Milk", weight: "1 gal", pricePerUnit: "$3.49/gal", totalPrice: 3.49, category: "Dairy" },
+                { name: "Ground Beef", weight: "1.2 lbs", pricePerUnit: "$5.99/lb", totalPrice: 7.19, category: "Meat" },
+                { name: "Pasta", weight: "16 oz", pricePerUnit: "$1.29/box", totalPrice: 1.29, category: "Pantry" }
+            ]);
+        }, 1200);
+    });
+}
+
+// Add drag and drop functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('receiptUpload');
+
+    if (uploadArea && fileInput) {
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = 'var(--accent)';
+            uploadArea.style.background = 'var(--bg-tertiary)';
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = 'var(--border)';
+            uploadArea.style.background = '';
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = 'var(--border)';
+            uploadArea.style.background = '';
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleReceiptUpload({ target: fileInput });
+            }
+        });
+    }
+});
+
+</script>
