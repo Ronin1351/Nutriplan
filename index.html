@@ -36,20 +36,6 @@
             --warning: #ffb74d;
             --bg-gradient: linear-gradient(135deg, #0f1116 0%, #1e1e1e 100%);
         }
-
-		.modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-.modal.active {
-  display: flex;
-}
-
 /* ===================== MOBILE RESPONSIVE ===================== */
 		
 		@media (max-width: 768px) {
@@ -1699,28 +1685,35 @@ function openImportModal() {
         ? `<html><head><script type="application/ld+json">${htmlCandidate}</script${''}>${baseHref ? `<base href="${baseHref}">` : ''}</head><body>
 <!-- Receipt Scanner Modal -->
 <div class="modal" id="receiptScannerModal">
-  <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h2>📄 Scan Receipt</h2>
-      <button class="btn btn-secondary" onclick="closeReceiptScanner()">Close</button>
-    </div>
+    <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>📄 Scan Receipt</h2>
+            <button class="btn btn-secondary" onclick="closeReceiptScanner()">Close</button>
+        </div>
 
-    <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-      <label for="receiptUpload" id="uploadArea"
-             style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 200px; border: 2px dashed var(--border); border-radius: 10px; cursor: pointer;">
-        <div style="font-size: 2em;">📷</div>
-        <div>Click or drop receipt image here</div>
-      </label>
-      <input type="file" id="receiptUpload" accept="image/*" style="display: none;" onchange="handleReceiptUpload(event)">
-      <div style="margin-top: 15px; display: flex; gap: 10px;">
-        <button class="btn" id="scanButton" onclick="scanReceipt()" disabled>Scan</button>
-        <button class="btn btn-secondary" id="clearButton" onclick="clearReceiptScanner()" disabled>Clear</button>
-      </div>
-    </div>
-    <div id="scanResults" style="display:none;"></div>
-  </div>
-</div>
-
+        <div style="background: var(--bg-secondary); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: center;">
+                <div>
+                    <label for="receiptUpload" class="upload-area" id="uploadArea" 
+                           style="display: block; width: 100%; height: 200px; border: 2px dashed var(--border); border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; transition: all 0.3s;">
+                        <div style="font-size: 3em; margin-bottom: 10px;">📷</div>
+                        <div style="font-weight: 600; margin-bottom: 5px;">Click to upload receipt</div>
+                        <div style="color: var(--text-secondary); font-size: 0.9em;">or drag & drop image here</div>
+                        <div style="color: var(--text-secondary); font-size: 0.8em; margin-top: 5px;">PNG, JPG, WEBP</div>
+                    </label>
+                    <input type="file" id="receiptUpload" accept="image/*" style="display: none;" onchange="handleReceiptUpload(event)">
+                </div>
+                
+                <div>
+                    <h3 style="margin-bottom: 10px;">Ready to Scan?</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">Upload a clear photo of your grocery receipt. Our AI will extract the items automatically.</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" id="scanButton" onclick="scanReceipt()" disabled style="flex: 1;">Scan Receipt</button>
+                        <button class="btn btn-secondary" id="clearButton" onclick="clearReceiptScanner()" disabled>Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Loading Spinner -->
         <div id="scanningSpinner" style="display: none; text-align: center; padding: 40px;">
