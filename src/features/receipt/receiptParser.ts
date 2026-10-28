@@ -56,7 +56,7 @@ export function orderReceiptFragments(fragments: ReceiptFragment[]): ReceiptRow[
 }
 
 const amountPattern = /(?:(?:₱|PHP|P)\s*)?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2})/gi;
-const totalPattern = /^(?:(?:NET\s+)?TOTAL|GRAND TOTAL|TOTAL PAID|AMOUNT DUE|BALANCE DUE)\b/i;
+const totalPattern = /^(?:(?:NET\s+)?TOTAL|SUBTOTAL|GRAND TOTAL|TOTAL PAID|AMOUNT DUE|BALANCE DUE)\b/i;
 const ignoredSummaryPattern = /^(?:CHANGE|E\s+WALLET|PAYMENT|VAT|VATS?\/?N|SALES TRANSACTION)\b/i;
 const compactDetailPattern = /(\d+\.\d{3})\s*@?\s*(\d{2,4}(?:\.\d{1,2})?)\s+(\d{1,4}(?:,\d{3})?\.\d{2})\s*$/i;
 const compactContinuationDetailPattern = /^(\d+\.\d{3})\s*@?\s*(\d{2,4}(?:\.\d{1,2})?)\s+(\d{1,4}(?:,\d{3})?\.\d{2})\s*$/i;
@@ -84,6 +84,12 @@ function continuationQuantity(text: string): number | null {
 export function isReceiptItemPriceConsistent(item: ReceiptDraftItem): boolean {
   if (item.unitPrice === undefined) return true;
   return Math.abs(item.quantity * item.unitPrice - item.totalPrice) <= 0.03;
+}
+
+export function isReceiptSubtotalConsistent(total: number | null, items: ReceiptDraftItem[]): boolean {
+  if (total === null || !Number.isFinite(total)) return true;
+  const capturedSubtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+  return Math.abs(capturedSubtotal - total) <= 0.03;
 }
 
 export function parseReceiptRows(rows: ReceiptRow[]): ReceiptDraft {

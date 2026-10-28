@@ -42,6 +42,37 @@ describe('ReceiptScanner', () => {
     expect(savedDraft!.items[0].category).toBe('Produce');
   });
 
+  it('removes an unwanted OCR line before saving', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn(async (_draft: ReceiptDraft) => undefined);
+    const inputController = controller({ engine: 'paddleocr', rawText: '', fragments: [
+      { text: 'RICE 90.00', confidence: 0.9, poly: [[0, 0], [100, 0], [100, 20], [0, 20]] },
+      { text: 'MILK 80.00', confidence: 0.9, poly: [[0, 30], [100, 30], [100, 50], [0, 50]] },
+    ] });
+    render(<ReceiptScanner ocr={inputController} onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.upload(screen.getByLabelText('Receipt image'), new File(['receipt'], 'receipt.jpg', { type: 'image/jpeg' }));
+    expect(await screen.findByLabelText('Item 2')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove item 2' }));
+    expect(screen.queryByLabelText('Item 2')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save receipt' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ items: [expect.objectContaining({ name: 'RICE' })] }));
+  });
+
+  it('highlights a detected subtotal when captured item totals do not match', async () => {
+    const user = userEvent.setup();
+    const inputController = controller({ engine: 'paddleocr', rawText: '', fragments: [
+      { text: 'RICE 90.00', confidence: 0.9, poly: [[0, 0], [100, 0], [100, 20], [0, 20]] },
+      { text: 'SUBTOTAL 100.00', confidence: 0.9, poly: [[0, 30], [100, 30], [100, 50], [0, 50]] },
+    ] });
+    render(<ReceiptScanner ocr={inputController} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.upload(screen.getByLabelText('Receipt image'), new File(['receipt'], 'receipt.jpg', { type: 'image/jpeg' }));
+    const subtotal = await screen.findByLabelText('Receipt subtotal');
+    expect(subtotal.closest('label')).toHaveClass('receipt-total-mismatch');
+    expect(screen.getByText('Check subtotal against captured items')).toBeInTheDocument();
+  });
+
   it('shows a failure and allows cancellation without saving', async () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();
