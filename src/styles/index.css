@@ -34,7 +34,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .brand-lockup { gap: .75rem; }
 .brand-lockup strong { display: block; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 1.45rem; letter-spacing: -.05em; }
 .brand-lockup span:not(.brand-icon) { display: block; color: var(--muted); font-size: .72rem; }
-.brand-icon { display: grid; width: 2rem; height: 2rem; place-items: center; color: #07100b; background: var(--accent); border-radius: .7rem; font-size: 1rem; box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 35%, transparent); }
+.brand-icon { display: block; width: 2.75rem; height: 2.75rem; flex: 0 0 2.75rem; object-fit: contain; border-radius: .7rem; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 30%, transparent)); }
 .header-controls { gap: .5rem; }
 .currency-control select, .theme-button { border: 1px solid var(--line); color: var(--text); background: var(--surface); border-radius: 999px; }
 .currency-control select { padding: .45rem .65rem; }

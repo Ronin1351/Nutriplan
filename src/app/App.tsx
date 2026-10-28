@@ -178,7 +178,7 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
   return (
     <div className="app-frame">
       <header className="app-header">
-        <div className="brand-lockup"><span className="brand-icon" aria-hidden="true">✦</span><div><strong>Nutriplan</strong><span>Personal kitchen planner</span></div></div>
+        <div className="brand-lockup"><img className="brand-icon" src="/nutriplan-logo.png" alt="" aria-hidden="true" /><div><strong>Nutriplan</strong><span>Personal kitchen planner</span></div></div>
         <div className="header-controls"><span className={online ? 'connection-status online' : 'connection-status offline'} role="status">{online ? 'Online' : 'Offline · cached data'}</span><label className="currency-control"><span className="sr-only">Currency</span><select aria-label="Currency" value={currency} onChange={(event) => setCurrency(event.target.value as CurrencyCode)}>{CURRENCIES.map((code) => <option key={code}>{code}</option>)}</select></label><button className="theme-button" aria-label="Toggle theme" onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '☾'}</button></div>
       </header>
       <OrbitalNav activeSection={activeSection} onChange={setActiveSection} />
