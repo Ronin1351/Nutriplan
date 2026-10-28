@@ -62,13 +62,13 @@ async function safeText(res) {
   try { return await res.text(); } catch { return ''; }
 }
 
-async function pollReadResult(opUrl, key, { attempts = 15, intervalMs = 800 } = {}) {
+export async function pollReadResult(opUrl, key, { attempts = 15, intervalMs = 800 } = {}) {
   for (let i = 0; i < attempts; i++) {
     const r = await fetch(opUrl, {
       headers: { 'Ocp-Apim-Subscription-Key': key }
     });
     const data = await r.json().catch(() => ({}));
-    const status = data?.status || data?.recognitionResults ? 'succeeded' : data?.status;
+    const status = data?.status;
 
     if (status === 'succeeded') return data;
     if (status === 'failed') throw new Error('Azure OCR failed');

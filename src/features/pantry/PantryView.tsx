@@ -1,0 +1,53 @@
+import { useMemo, useState } from 'react';
+import { formatCurrency } from '../../lib/currency';
+import { getExpirationStatus } from '../../lib/pantry';
+import type { NewPantryItem, PantryItem } from '../../types/domain';
+
+interface PantryViewProps {
+  pantry: PantryItem[];
+  currency: Parameters<typeof formatCurrency>[1];
+  onCreate: (item: NewPantryItem) => Promise<void>;
+  onUpdate: (item: PantryItem) => Promise<void>;
+  onRemove: (id: string | number) => Promise<void>;
+  onSaveNotes: (id: string | number, notes: string | null) => Promise<void>;
+}
+
+const emptyForm: NewPantryItem = { userId: 'personal-user', item: '', amount: 1, unit: 'units', price: 0, expirationDate: null, category: 'Uncategorized', notes: null, isActive: true };
+
+export default function PantryView({ pantry, currency, onCreate, onUpdate, onRemove, onSaveNotes }: PantryViewProps) {
+  const [query, setQuery] = useState('');
+  const [form, setForm] = useState<NewPantryItem>(emptyForm);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
+  const [notesId, setNotesId] = useState<string | number | null>(null);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const filtered = useMemo(() => pantry.filter((item) => item.item.toLowerCase().includes(query.toLowerCase()) || item.category.toLowerCase().includes(query.toLowerCase())), [pantry, query]);
+
+  function startEdit(item: PantryItem) {
+    setEditingId(item.id);
+    setForm(item);
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.item.trim() || form.amount <= 0 || form.price < 0) return;
+    setSaving(true);
+    try {
+      if (editingId !== null) await onUpdate({ ...form, id: editingId, item: form.item.trim() });
+      else await onCreate({ ...form, item: form.item.trim() });
+      setForm(emptyForm);
+      setEditingId(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="content-section">
+      <div className="section-toolbar"><div><p className="section-kicker">What you have</p><h2>Pantry</h2></div><div className="pantry-total">{formatCurrency(pantry.filter((item) => item.isActive).reduce((sum, item) => sum + item.amount * item.price, 0), currency)}</div></div>
+      <form className="quick-form" onSubmit={submit}><div className="form-heading"><h3>{editingId === null ? 'Add pantry item' : 'Edit pantry item'}</h3>{editingId !== null && <button type="button" className="text-button" onClick={() => { setEditingId(null); setForm(emptyForm); }}>Cancel edit</button>}</div><div className="form-grid"><label>Item<input aria-label="Pantry item" value={form.item} onChange={(event) => setForm({ ...form, item: event.target.value })} /></label><label>Amount<input type="number" min="0" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: Number(event.target.value) })} /></label><label>Unit<select value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })}><option>units</option><option>each</option><option>cup</option><option>tbsp</option><option>tsp</option><option>g</option><option>kg</option><option>ml</option><option>L</option><option>oz</option><option>lb</option></select></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} /></label></div><div className="form-grid"><label>Category<input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} /></label><label>Expiration<input type="date" value={form.expirationDate ?? ''} onChange={(event) => setForm({ ...form, expirationDate: event.target.value || null })} /></label></div><button className="button primary full-width" disabled={saving}>{saving ? 'Saving…' : editingId === null ? 'Add item' : 'Update item'}</button></form>
+      <label className="search-field">Search pantry<input aria-label="Search pantry" placeholder="Search items or categories" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      {pantry.length === 0 ? <div className="empty-state"><span>◌</span><h3>Your pantry is empty</h3><p>Add ingredients to compare stock with your recipes.</p></div> : filtered.length === 0 ? <div className="empty-state"><h3>No pantry items match your search.</h3></div> : <div className="pantry-list">{filtered.map((item) => { const expiration = getExpirationStatus(item.expirationDate); return <article className="pantry-card" key={item.id}><div className="pantry-card-top"><div><p className="card-category">{item.category}</p><h3>{item.item}</h3></div><strong>{formatCurrency(item.amount * item.price, currency)}</strong></div><div className="pantry-meta"><span>{item.amount} {item.unit}</span><span>{formatCurrency(item.price, currency)} / {item.unit}</span>{expiration.label && <span className={expiration.urgent ? 'warning-text' : 'muted'}>{expiration.label}</span>}</div><div className="card-actions"><button className="text-button" onClick={() => startEdit(item)}>Edit</button><button className="text-button" aria-label={`Edit notes for ${item.item}`} onClick={() => { setNotesId(item.id); setNotes(item.notes ?? ''); }}>Notes</button><button className="text-button danger" onClick={() => void onRemove(item.id)}>Remove</button></div>{notesId === item.id && <div className="notes-editor"><label>Notes for {item.item}<textarea aria-label={`Notes for ${item.item}`} rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label><div className="form-actions"><button className="button secondary" onClick={() => setNotesId(null)}>Cancel</button><button className="button primary" onClick={async () => { await onSaveNotes(item.id, notes.trim() || null); setNotesId(null); }}>Save notes</button></div></div>}</article>; })}</div>}
+    </section>
+  );
+}

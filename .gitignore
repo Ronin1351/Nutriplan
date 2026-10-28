@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+
+# Local agent analysis and planning artifacts
+.superpowers/
+graphify-out/
+work/
+
+# Capacitor native build output
+android/.gradle/
+android/build/
+android/app/build/
+ios/App/Pods/
+ios/App/build/
