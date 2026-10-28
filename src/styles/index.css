@@ -95,6 +95,7 @@ label textarea { resize: vertical; }
 .button.danger, .icon-button.danger { color: var(--danger, #ff6b86); }
 .editor-section small { display: block; grid-column: 1 / -1; }
 .form-actions { justify-content: flex-end; gap: .55rem; margin-top: 1rem; }
+.receipt-upload-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
 .validation-errors { margin-bottom: 1rem; padding: .75rem .9rem; border-left: 3px solid var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); font-size: .85rem; }
 .validation-errors ul { margin: 0; padding-left: 1.1rem; }
 .back-link, .text-button { min-height: 44px; border: 0; padding: .25rem .35rem; color: var(--accent-dark); background: transparent; font-weight: 800; }
