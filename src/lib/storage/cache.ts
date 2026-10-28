@@ -1,5 +1,6 @@
 import type { MealPlan, PantryItem, Recipe } from '../../types/domain';
 import type { CategoryRule } from '../../features/categories/categoryClassifier';
+import { openKitchenDatabase, requestResult, transactionDone } from './database';
 
 export interface CacheSnapshot {
   recipes: Recipe[];
@@ -38,19 +39,19 @@ function indexedDbBackend(factory: IDBFactory | undefined): CacheBackend | null 
   if (!factory) return null;
   let database: Promise<IDBDatabase> | null = null;
   const open = () => database ??= new Promise((resolve, reject) => {
-    const request = factory.open('nutriplan-cache', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('cache');
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('IndexedDB unavailable'));
+    void openKitchenDatabase(factory).then(resolve, reject);
   });
   return {
     async get(key) {
       const db = await open();
-      return new Promise((resolve, reject) => { const request = db.transaction('cache', 'readonly').objectStore('cache').get(key); request.onsuccess = () => resolve(request.result ?? null); request.onerror = () => reject(request.error ?? new Error('IndexedDB read failed')); });
+      const transaction = db.transaction('cache', 'readonly');
+      return (await requestResult(transaction.objectStore('cache').get(key))) ?? null;
     },
     async set(key, value) {
       const db = await open();
-      return new Promise((resolve, reject) => { const request = db.transaction('cache', 'readwrite').objectStore('cache').put(value, key); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error ?? new Error('IndexedDB write failed')); });
+      const transaction = db.transaction('cache', 'readwrite');
+      transaction.objectStore('cache').put(value, key);
+      await transactionDone(transaction);
     },
   };
 }

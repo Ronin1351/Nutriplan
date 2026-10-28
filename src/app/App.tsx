@@ -12,6 +12,7 @@ import { CURRENCY_SYMBOLS, type CurrencyCode } from '../lib/currency';
 import { createAppCache, type AppCache, type CacheSnapshot } from '../lib/storage/cache';
 import { isSupabaseConfigured } from '../lib/supabase/client';
 import { normalizeCategoryText, type CategoryRule } from '../features/categories/categoryClassifier';
+import { receiptDraftToCapture } from '../features/prices/receiptCapture';
 
 const CURRENCIES = Object.keys(CURRENCY_SYMBOLS) as CurrencyCode[];
 
@@ -155,7 +156,22 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
     setMealPlan(plan); await writeCache({ recipes, pantry, mealPlan: plan });
   }
 
+  async function refreshPantryFromPriceStore() {
+    if (!source.prices) return;
+    const refreshed = await source.listPantry();
+    setPantry(refreshed);
+    await writeCache({ recipes, pantry: refreshed, mealPlan });
+  }
+
   async function importReceipt(draft: ReceiptDraft) {
+    if (source.prices) {
+      await source.prices.saveCapture(receiptDraftToCapture(draft, currency));
+      const refreshed = await source.listPantry();
+      setPantry(refreshed);
+      await writeCache({ recipes, pantry: refreshed, mealPlan });
+      setActiveSection('pantry');
+      return;
+    }
     const imported: PantryItem[] = [];
     for (const item of draft.items) {
       const input: NewPantryItem = { userId: 'personal-user', item: item.name, amount: item.quantity, unit: 'units', price: item.unitPrice ?? item.totalPrice / item.quantity, expirationDate: null, category: item.category ?? 'Uncategorized', notes: draft.merchant || null, isActive: true };
@@ -183,7 +199,7 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
       </header>
       <OrbitalNav activeSection={activeSection} onChange={setActiveSection} />
       <main className="app-main">
-        {loading ? <div className="state-panel"><span className="loading-dot" aria-hidden="true" /><h1>Loading your kitchen…</h1><p>Getting your recipes and pantry ready.</p></div> : error ? <div className="state-panel error-state" role="alert"><span aria-hidden="true">!</span><h1>Couldn’t load your kitchen</h1><p>{error}</p><button className="button primary" onClick={() => void loadData()}>Retry</button></div> : activeSection === 'recipes' ? <RecipesView recipes={recipes} pantry={pantry} currency={currency} onCreate={createRecipe} onUpdate={updateRecipe} onRemove={removeRecipe} onImport={createRecipe} onImportRecipes={importRecipes} /> : activeSection === 'pantry' ? <PantryView pantry={pantry} currency={currency} onCreate={createPantryItem} onUpdate={updatePantryItem} onRemove={removePantryItem} onSaveNotes={savePantryNotes} /> : activeSection === 'planner' ? <MealPlannerView recipes={recipes} mealPlan={mealPlan} onChange={saveMealPlan} /> : activeSection === 'shopping' ? <ShoppingListView recipes={recipes} pantry={pantry} mealPlan={mealPlan} /> : <ImportHub categoryRules={categoryRules} onSaveRecipe={createRecipe} onSaveReceipt={importReceipt} onCancel={() => setActiveSection('recipes')} />}
+        {loading ? <div className="state-panel"><span className="loading-dot" aria-hidden="true" /><h1>Loading your kitchen…</h1><p>Getting your recipes and pantry ready.</p></div> : error ? <div className="state-panel error-state" role="alert"><span aria-hidden="true">!</span><h1>Couldn’t load your kitchen</h1><p>{error}</p><button className="button primary" onClick={() => void loadData()}>Retry</button></div> : activeSection === 'recipes' ? <RecipesView recipes={recipes} pantry={pantry} currency={currency} onCreate={createRecipe} onUpdate={updateRecipe} onRemove={removeRecipe} onImport={createRecipe} onImportRecipes={importRecipes} /> : activeSection === 'pantry' ? <PantryView pantry={pantry} currency={currency} onCreate={createPantryItem} onUpdate={updatePantryItem} onRemove={removePantryItem} onSaveNotes={savePantryNotes} priceStore={source.prices} onPricesSaved={refreshPantryFromPriceStore} /> : activeSection === 'planner' ? <MealPlannerView recipes={recipes} mealPlan={mealPlan} onChange={saveMealPlan} /> : activeSection === 'shopping' ? <ShoppingListView recipes={recipes} pantry={pantry} mealPlan={mealPlan} /> : <ImportHub categoryRules={categoryRules} onSaveRecipe={createRecipe} onSaveReceipt={importReceipt} onCancel={() => setActiveSection('recipes')} />}
       </main>
       <footer className="app-footer">Nutriplan · built for your everyday kitchen</footer>
     </div>

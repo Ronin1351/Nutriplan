@@ -58,6 +58,7 @@ export interface PantryItem {
   category: string;
   notes: string | null;
   isActive: boolean;
+  catalogItemId?: string;
 }
 
 export const PANTRY_CATEGORIES = [

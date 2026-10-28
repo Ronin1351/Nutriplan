@@ -19,7 +19,7 @@ describe('receipt parser', () => {
       fragment('TOTAL', 10, 90), fragment('₱85.50', 250, 90),
     ]);
     expect(parseReceiptRows(rows)).toMatchObject({
-      merchant: 'STORE', total: 85.5,
+      merchant: 'STORE', total: 85.5, purchaseDate: null, receiptNumber: null,
       items: [{ name: 'RICE', quantity: 1, totalPrice: 85.5 }],
     });
   });

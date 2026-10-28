@@ -21,6 +21,8 @@ export interface ReceiptDraftItem {
 export interface ReceiptDraft {
   merchant: string;
   total: number | null;
+  purchaseDate?: string | null;
+  receiptNumber?: string | null;
   items: ReceiptDraftItem[];
   rawRows: string[];
 }
@@ -141,5 +143,5 @@ export function parseReceiptRows(rows: ReceiptRow[]): ReceiptDraft {
     }
   }
 
-  return { merchant, total, items, rawRows };
+  return { merchant, total, purchaseDate: null, receiptNumber: null, items, rawRows };
 }
