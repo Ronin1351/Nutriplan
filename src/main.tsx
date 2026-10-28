@@ -9,6 +9,12 @@ if (!rootElement) {
   throw new Error('React root element was not found.');
 }
 
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js');
+  });
+}
+
 createRoot(rootElement).render(
   <StrictMode>
     <App />
