@@ -12,11 +12,13 @@ interface ReceiptsViewProps {
   currency: CurrencyCode;
   categoryRules?: CategoryRule[];
   onSaveReceipt: (draft: ReceiptDraft) => Promise<void>;
+  /** Called after a receipt or line is deleted so stock derived from it can be refreshed. */
+  onChanged?: () => Promise<void> | void;
   openEventId?: string | null;
   onOpened?: () => void;
 }
 
-export default function ReceiptsView({ inventory, currency, categoryRules = [], onSaveReceipt, openEventId, onOpened }: ReceiptsViewProps) {
+export default function ReceiptsView({ inventory, currency, categoryRules = [], onSaveReceipt, onChanged, openEventId, onOpened }: ReceiptsViewProps) {
   const [receipts, setReceipts] = useState<ReceiptSummary[]>([]);
   const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +42,12 @@ export default function ReceiptsView({ inventory, currency, categoryRules = [], 
 
   async function deleteReceipt(entry: ReceiptSummary) {
     if (!window.confirm('Delete this receipt and return its unconsumed stock?')) return;
-    try { await inventory.deleteReceipt(entry.id, entry.revision); setReceipt(null); await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to delete receipt.'); }
+    try { await inventory.deleteReceipt(entry.id, entry.revision); setReceipt(null); await refresh(); await onChanged?.(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to delete receipt.'); }
   }
 
   async function deleteLine(detail: ReceiptDetail, lineId: string, itemName: string) {
     if (!window.confirm(`Delete ${itemName} from this receipt?`)) return;
-    try { await inventory.deleteReceiptLine(detail.id, lineId, detail.revision); setReceipt(await inventory.getReceipt(detail.id)); await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to delete receipt line.'); }
+    try { await inventory.deleteReceiptLine(detail.id, lineId, detail.revision); setReceipt(await inventory.getReceipt(detail.id)); await refresh(); await onChanged?.(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to delete receipt line.'); }
   }
 
   const groups = groupReceiptsByYear(receipts);

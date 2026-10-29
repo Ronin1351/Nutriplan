@@ -151,4 +151,13 @@ describe('inventory purchase lines and receipt totals', () => {
     await store.saveCapture(capture({ lines: [line('Eggs', 1200), line('Milk', 900)] }));
     expect((await inventory.listReceipts())[0]?.totalMinor).toBe(2100);
   });
+
+  it('I5: listReceipts excludes quote events', async () => {
+    const { store, inventory } = setup();
+    await store.saveCapture(capture({ kind: 'quote', lines: [line('Butter', 500)] }));
+    await store.saveCapture(capture({ kind: 'purchase', lines: [line('Eggs', 1200)] }));
+    const receipts = await inventory.listReceipts();
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].totalMinor).toBe(1200);
+  });
 });

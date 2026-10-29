@@ -111,4 +111,16 @@ describe('PantryView stock segment', () => {
     expect(onOpenReceipt).toHaveBeenCalledWith('event-1');
     expect(listPurchaseLines).toHaveBeenCalledTimes(1);
   });
+
+  it('reloads purchase lines when the pantry changes', async () => {
+    const user = userEvent.setup();
+    const listPurchaseLines = vi.fn().mockResolvedValue([]);
+    const props = { pantry, currency: 'PHP' as const, onCreate: vi.fn(), onUpdate: vi.fn(), onRemove: vi.fn(), onSaveNotes: vi.fn(), onQuote: vi.fn(), onFindCollision: vi.fn().mockResolvedValue(null), onMerge: vi.fn(), inventory: { listPurchaseLines } as never };
+    const { rerender } = render(<PantryView {...props} />);
+    await user.click(screen.getByRole('tab', { name: 'Purchases' }));
+    await screen.findByText('No purchases recorded yet.');
+    rerender(<PantryView {...props} pantry={[...pantry, item({ id: 'p-new', item: 'Rice' })]} />);
+    await screen.findByText('No purchases recorded yet.');
+    expect(listPurchaseLines).toHaveBeenCalledTimes(2);
+  });
 });

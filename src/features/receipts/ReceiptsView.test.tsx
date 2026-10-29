@@ -64,4 +64,15 @@ describe('ReceiptsView', () => {
     expect(service.deleteReceipt).toHaveBeenCalledWith('r-2026b', 0);
     vi.restoreAllMocks();
   });
+
+  it('I3: reports a change after deleting a receipt so the pantry can refresh', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onChanged = vi.fn();
+    render(<ReceiptsView inventory={inventory()} currency="PHP" onSaveReceipt={vi.fn()} onChanged={onChanged} />);
+    await screen.findAllByRole('group');
+    await user.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+  });
 });

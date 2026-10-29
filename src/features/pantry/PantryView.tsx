@@ -47,6 +47,8 @@ export default function PantryView({ pantry, currency, onCreate, onUpdate, onRem
   const [purchases, setPurchases] = useState<PurchaseLine[] | null>(null);
   const [purchasesError, setPurchasesError] = useState<string | null>(null);
 
+  useEffect(() => { setPurchases(null); }, [pantry]);
+
   useEffect(() => {
     if (segment !== 'purchases' || purchases !== null || !inventory) return;
     let cancelled = false;

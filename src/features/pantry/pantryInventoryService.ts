@@ -238,7 +238,7 @@ export function createIndexedDbInventoryService(options: IndexedDbInventoryServi
         readAll<{ id: string; name: string }>(transaction.objectStore('price_merchants')),
       ]);
       const merchantNames = new Map(merchants.map((merchant) => [merchant.id, merchant.name]));
-      return events.map((event) => { const lines = observations.filter((observation) => observation.eventId === event.id); return { id: event.id, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null, occurredOn: event.occurredOn, dateEstimated: event.dateEstimated, currency: event.currency, lineCount: lines.length, totalMinor: lines.reduce((sum, observation) => sum + observation.paidMinor, 0), revision: event.revision }; }).sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
+      return events.filter((event) => event.kind === 'purchase').map((event) => { const lines = observations.filter((observation) => observation.eventId === event.id); return { id: event.id, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null, occurredOn: event.occurredOn, dateEstimated: event.dateEstimated, currency: event.currency, lineCount: lines.length, totalMinor: lines.reduce((sum, observation) => sum + observation.paidMinor, 0), revision: event.revision }; }).sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
     },
 
     async listPurchaseLines() {

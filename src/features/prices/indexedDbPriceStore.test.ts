@@ -74,4 +74,54 @@ describe('indexedDb price store collisions', () => {
     expect(stock).toHaveLength(1);
     expect(stock[0].amount).toBe(12);
   });
+
+  it('C1: editing the unit converts the row contributions so a later receipt delete only removes that receipt', async () => {
+    const { store, inventory } = setup();
+    const target = await store.createStock(pantry({ item: 'Flour', amount: 1, unit: 'kg', price: 80 }));
+    const source = await store.createStock(pantry({ item: 'Flour', amount: 500, unit: 'g', price: 0.1, expirationDate: '2026-12-01' }));
+    const edited = await store.updateStock({ ...source, amount: 0.5, unit: 'kg', expirationDate: null });
+    expect(edited.unit).toBe('kg');
+    const merged = await store.mergeStockInto(String(source.id), String(target.id));
+    expect(merged.amount).toBeCloseTo(1.5, 6);
+    const receipts = await inventory.listReceipts();
+    const details = await Promise.all(receipts.map((receipt) => inventory.getReceipt(receipt.id)));
+    const sourceReceipt = details.find((detail) => detail?.lines[0]?.quantity === '500');
+    expect(sourceReceipt).toBeDefined();
+    await inventory.deleteReceipt(sourceReceipt!.id, sourceReceipt!.revision);
+    const [remaining] = await store.listStock();
+    expect(remaining.amount).toBeCloseTo(1, 6);
+    expect(remaining.isActive).toBe(true);
+  });
+
+  it('C1: keep-separate unit edit converts contributions so consumption cannot exceed real stock', async () => {
+    const { store, inventory } = setup();
+    const sugar = await store.createStock(pantry({ item: 'Sugar', amount: 1000, unit: 'g', price: 0.05 }));
+    await store.updateStock({ ...sugar, amount: 1, unit: 'kg' });
+    const result = await inventory.consumeIngredients({ operationId: 'op-s', ingredients: [{ item: 'Sugar', amount: 2, unit: 'kg' }] });
+    expect(result.results[0]).toMatchObject({ consumed: 1, missing: 1 });
+  });
+
+  it('C1: an edit to a non-convertible unit is rejected', async () => {
+    const { store } = setup();
+    const rice = await store.createStock(pantry({ item: 'Rice', amount: 5, unit: 'kg' }));
+    await expect(store.updateStock({ ...rice, unit: 'units' })).rejects.toThrow(/convert/i);
+  });
+
+  it('I1: renaming a manual row to match another manual row reports the collision', async () => {
+    const { store } = setup();
+    const milk = await store.createStock(pantry({ item: 'Milk', amount: 1, unit: 'L' }));
+    const typo = await store.createStock(pantry({ item: 'Mlik', amount: 1, unit: 'L' }));
+    const collision = await store.findStockCollision({ ...typo, item: 'Milk' });
+    expect(collision?.id).toBe(milk.id);
+  });
+
+  it('I1: renaming re-points the row at the catalog item of the new name', async () => {
+    const { store, inventory } = setup();
+    await store.createStock(pantry({ item: 'Milk', amount: 1, unit: 'L' }));
+    const typo = await store.createStock(pantry({ item: 'Mlik', amount: 1, unit: 'L' }));
+    const renamed = await store.updateStock({ ...typo, item: 'Milk' });
+    const [milk] = await store.listStock();
+    expect(renamed.catalogItemId).toBe(milk.catalogItemId);
+    expect((await inventory.listPurchaseLines()).every((line) => line.itemName === 'Milk')).toBe(true);
+  });
 });

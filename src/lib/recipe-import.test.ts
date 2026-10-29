@@ -92,4 +92,10 @@ describe('parseRecipeText', () => {
     expect(() => parseRecipeText('  \n ')).toThrow(RecipeImportError);
     expect(() => parseRecipeText('')).toThrow('No text was found in the photo.');
   });
+
+  it('I4: numbered steps are instructions, not ingredients', () => {
+    const draft = parseRecipeText('Adobo\n1 kg chicken\n1. Combine everything.\n2) Simmer 30 minutes.\nStep 3 Serve.');
+    expect(draft.ingredients).toHaveLength(1);
+    expect(draft.instructions).toBe('1. Combine everything.\n2) Simmer 30 minutes.\nStep 3 Serve.');
+  });
 });
