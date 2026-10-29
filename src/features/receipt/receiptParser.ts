@@ -27,30 +27,53 @@ export interface ReceiptDraft {
   rawRows: string[];
 }
 
-interface Bounds { left: number; right: number; top: number; bottom: number; centerY: number; height: number; }
+interface Bounds { left: number; right: number; top: number; bottom: number; centerX: number; centerY: number; height: number; }
 
-function bounds(fragment: ReceiptFragment): Bounds {
+function bounds(fragment: ReceiptFragment, skew = 0): Bounds {
   const xs = fragment.poly.map((point) => point[0] ?? 0);
-  const ys = fragment.poly.map((point) => point[1] ?? 0);
+  // De-rotate: subtract the tilt contribution of each point's x so a slanted line becomes level.
+  const ys = fragment.poly.map((point) => (point[1] ?? 0) - (point[0] ?? 0) * skew);
   const left = xs.length ? Math.min(...xs) : 0; const right = xs.length ? Math.max(...xs) : 0; const top = ys.length ? Math.min(...ys) : 0; const bottom = ys.length ? Math.max(...ys) : 0;
-  return { left, right, top, bottom, centerY: (top + bottom) / 2, height: Math.max(1, bottom - top) };
+  return { left, right, top, bottom, centerX: (left + right) / 2, centerY: (top + bottom) / 2, height: Math.max(1, bottom - top) };
 }
 
-function yOverlaps(a: Bounds, b: Bounds): boolean {
-  const overlap = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-  return overlap > 0 || Math.abs(a.centerY - b.centerY) <= Math.max(a.height, b.height) * 0.5;
+/** Median slope of the fragments' top edges: the page tilt in y-per-x. Short fragments are ignored because their slope is noise. */
+function estimateSkew(fragments: ReceiptFragment[]): number {
+  const slopes = fragments.flatMap((fragment) => {
+    const [a, b] = fragment.poly;
+    if (!a || !b) return [];
+    const dx = (b[0] ?? 0) - (a[0] ?? 0);
+    if (Math.abs(dx) < 40) return [];
+    return [((b[1] ?? 0) - (a[1] ?? 0)) / dx];
+  }).sort((x, y) => x - y);
+  if (slopes.length === 0) return 0;
+  const slope = slopes[Math.floor(slopes.length / 2)];
+  return Math.abs(slope) < 0.25 ? slope : 0;
+}
+
+function sameRow(a: Bounds, rowTop: number, rowBottom: number): boolean {
+  const rowHeight = Math.max(1, rowBottom - rowTop);
+  const overlap = Math.max(0, Math.min(a.bottom, rowBottom) - Math.max(a.top, rowTop));
+  return overlap >= Math.min(a.height, rowHeight) * 0.4;
 }
 
 export function orderReceiptFragments(fragments: ReceiptFragment[]): ReceiptRow[] {
-  const ordered = [...fragments].filter((fragment) => fragment.text.trim()).sort((a, b) => bounds(a).centerY - bounds(b).centerY);
-  const rows: ReceiptFragment[][] = [];
-  for (const fragment of ordered) {
-    const fragmentBounds = bounds(fragment);
-    const row = rows.find((candidate) => yOverlaps(fragmentBounds, bounds(candidate[0])));
-    if (row) row.push(fragment); else rows.push([fragment]);
+  const skew = estimateSkew(fragments);
+  const ordered = [...fragments].filter((fragment) => fragment.text.trim()).map((fragment) => ({ fragment, box: bounds(fragment, skew) })).sort((a, b) => a.box.centerY - b.box.centerY);
+  const rows: Array<{ members: typeof ordered; top: number; bottom: number }> = [];
+  for (const entry of ordered) {
+    const row = rows.find((candidate) => sameRow(entry.box, candidate.top, candidate.bottom));
+    if (row) {
+      row.members.push(entry);
+      // Track the row's typical extent, not its first member, so one tall fragment cannot swallow the next line.
+      row.top = (row.top * (row.members.length - 1) + entry.box.top) / row.members.length;
+      row.bottom = (row.bottom * (row.members.length - 1) + entry.box.bottom) / row.members.length;
+    } else {
+      rows.push({ members: [entry], top: entry.box.top, bottom: entry.box.bottom });
+    }
   }
-  return rows.map((fragmentsInRow) => {
-    const sorted = fragmentsInRow.sort((a, b) => bounds(a).left - bounds(b).left);
+  return rows.map((row) => {
+    const sorted = row.members.sort((a, b) => a.box.left - b.box.left).map((entry) => entry.fragment);
     return { text: sorted.map((fragment) => fragment.text.trim()).join(' '), fragments: sorted, confidence: sorted.length ? Math.min(...sorted.map((fragment) => fragment.confidence)) : 0 };
   });
 }
@@ -67,7 +90,7 @@ function numbers(text: string): number[] {
 }
 
 function cleanName(text: string): string {
-  return text.replace(amountPattern, '').replace(/^\s*\d+(?:\.\d+)?\s*[x×]\s*/i, '').replace(/\s+/g, ' ').trim();
+  return text.replace(/^\s*\*+\s*/, '').replace(amountPattern, '').replace(/^\s*\d+(?:\.\d+)?\s*[x×]\s*/i, '').replace(/\s+/g, ' ').trim();
 }
 
 function isContinuation(text: string): boolean {
@@ -113,7 +136,7 @@ export function parseReceiptRows(rows: ReceiptRow[]): ReceiptDraft {
     }
     const compactDetail = text.match(compactDetailPattern);
     if (compactDetail) {
-      const name = text.slice(0, compactDetail.index).trim();
+      const name = text.slice(0, compactDetail.index).replace(/^\s*\*+\s*/, '').trim();
       const quantity = Number(compactDetail[1]);
       const unitPrice = Number(compactDetail[2]);
       const totalPrice = Number(compactDetail[3].replace(/,/g, ''));
@@ -124,7 +147,7 @@ export function parseReceiptRows(rows: ReceiptRow[]): ReceiptDraft {
     }
     if (!merchant && values.length === 0) {
       if (index === 0 && !isContinuation(rows[index + 1]?.text ?? '')) merchant = text;
-      else pendingName = { name: text, confidence: row.confidence };
+      else pendingName = { name: text.replace(/^\s*\*+\s*/, ''), confidence: row.confidence };
       continue;
     }
     if (isContinuation(text) && (items.length || pendingName)) {
