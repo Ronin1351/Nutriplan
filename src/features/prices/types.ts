@@ -178,6 +178,8 @@ export interface PriceStore {
   listStock(): Promise<PantryItem[]>;
   createStock(input: NewPantryItem): Promise<PantryItem>;
   updateStock(item: PantryItem): Promise<PantryItem>;
+  findStockCollision(item: PantryItem): Promise<PantryItem | null>;
+  mergeStockInto(sourceId: string, targetId: string): Promise<PantryItem>;
   removeStock(id: string | number): Promise<void>;
   saveStockNotes(id: string | number, notes: string | null): Promise<void>;
 }

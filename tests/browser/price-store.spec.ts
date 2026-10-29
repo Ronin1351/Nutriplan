@@ -13,10 +13,11 @@ test('mobile shell creates v2 local storage without horizontal overflow', async 
 test('records a local price and opens its history on a phone', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /Pantry/i }).click();
-  await page.getByRole('button', { name: 'Record price' }).click();
-  await page.getByLabel('Price item').fill('Rice');
-  await page.getByLabel('Observed price').fill('100');
-  await page.getByRole('button', { name: 'Save price' }).click();
+  await page.getByRole('button', { name: 'Add item' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Add pantry item' });
+  await sheet.getByLabel('Item').fill('Rice');
+  await sheet.getByLabel('Price').fill('100');
+  await sheet.getByRole('button', { name: 'Save item' }).click();
   const riceCard = page.locator('.pantry-card-opener').filter({ hasText: 'Rice' });
   await expect(riceCard).toBeVisible();
   await riceCard.click();

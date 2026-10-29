@@ -1,10 +1,11 @@
 import type { NewPantryItem, PantryItem } from '../../types/domain';
 import { captureFingerprint } from './captureFingerprint';
-import { matchItem } from './itemMatching';
+import { matchItem, normalizeItemName } from './itemMatching';
 import { minorToMajor, pantryToStock, stockToPantry } from './pantryPriceAdapter';
 import type { CatalogItem, EventCorrection, ItemAlias, Merchant, ObservationCorrection, PriceCapture, PriceEvent, PriceExport, PriceHistoryPoint, PriceHistoryQuery, PriceObservation, PriceStore, PriceStock, PriceSummary, SaveCaptureResult } from './types';
 import { openKitchenDatabase, requestResult, transactionDone } from '../../lib/storage/database';
 import { findMergeTarget, mergeStockRows, toStockUnit, type StockContribution } from '../pantry/pantryInventoryService';
+import { convertUnitsStrictDetailed, normalizeUnit } from '../../lib/units';
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -12,6 +13,19 @@ function id(prefix: string): string {
 
 async function all<T>(store: IDBObjectStore): Promise<T[]> {
   return (await requestResult(store.getAll())) as T[];
+}
+
+/**
+ * Picks the catalog item an edited row should point at. If the name is unchanged the stored
+ * catalog id stands; if it changed, the new name is matched against the catalog (a new item is
+ * returned, not yet stored, when nothing matches). Returns undefined when nothing can be resolved.
+ */
+function resolveCatalogForName(item: PantryItem, stored: PriceStock | undefined, items: CatalogItem[], aliases: ItemAlias[]): CatalogItem | undefined {
+  const current = items.find((entry) => entry.id === (stored?.itemId ?? item.catalogItemId));
+  if (current && normalizeItemName(current.name) === normalizeItemName(item.item)) return current;
+  const match = matchItem({ name: item.item }, items, aliases);
+  if (match.kind === 'exact' || match.kind === 'alias') return match.item;
+  return { id: id('item'), name: item.item.trim(), brand: null, packageQuantity: null, packageUnit: null, category: item.category, createdAt: new Date().toISOString() };
 }
 
 export interface IndexedDbPriceStoreOptions { factory?: IDBFactory; }
@@ -97,13 +111,18 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
     async listStock() { return (await read<PriceStock>('price_stock')).map(stockToPantry); },
     async createStock(input: NewPantryItem) {
       const db = await open();
-      const transaction = db.transaction(['price_stock', 'price_events', 'price_observations', 'price_stock_contributions'], 'readwrite');
+      const transaction = db.transaction(['price_stock', 'price_events', 'price_observations', 'price_stock_contributions', 'price_items', 'price_aliases'], 'readwrite');
       const stockStore = transaction.objectStore('price_stock');
       const eventStore = transaction.objectStore('price_events');
       const observationStore = transaction.objectStore('price_observations');
       const contributionStore = transaction.objectStore('price_stock_contributions');
-      const stocks = await all<PriceStock>(stockStore);
-      const incoming = pantryToStock(input, id('stock'));
+      const itemsStore = transaction.objectStore('price_items');
+      const [stocks, items, aliases] = await Promise.all([all<PriceStock>(stockStore), all<CatalogItem>(itemsStore), all<ItemAlias>(transaction.objectStore('price_aliases'))]);
+      // Manual adds attach to the catalog like receipt lines do, so both paths agree on what "the same item" is.
+      const match = input.catalogItemId ? { kind: 'exact' as const, item: items.find((item) => item.id === input.catalogItemId) } : matchItem({ name: input.item }, items, aliases);
+      const catalog = (match.kind === 'exact' || match.kind === 'alias') && match.item ? match.item : { id: id('item'), name: input.item.trim(), brand: null, packageQuantity: null, packageUnit: null, category: input.category, createdAt: new Date().toISOString() } satisfies CatalogItem;
+      if (!items.some((item) => item.id === catalog.id)) itemsStore.put(catalog, catalog.id);
+      const incoming = pantryToStock({ ...input, catalogItemId: catalog.id }, id('stock'));
       const existing = findMergeTarget(stocks, incoming);
       const stock = existing ? mergeStockRows(existing, incoming) : incoming;
       stockStore.put(stock, stock.id);
@@ -118,21 +137,58 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
     },
     async updateStock(item: PantryItem) {
       const db = await open();
+      const transaction = db.transaction(['price_stock', 'price_stock_contributions', 'price_items', 'price_aliases', 'price_observations'], 'readwrite');
+      const stockStore = transaction.objectStore('price_stock');
+      const contributionStore = transaction.objectStore('price_stock_contributions');
+      const itemsStore = transaction.objectStore('price_items');
+      const observationStore = transaction.objectStore('price_observations');
+      const stored = await requestResult(stockStore.get(String(item.id))) as PriceStock | undefined;
+      const [items, aliases] = await Promise.all([all<CatalogItem>(itemsStore), all<ItemAlias>(transaction.objectStore('price_aliases'))]);
+      // A renamed row follows its new name into the catalog; that is what lets a typo fix collide with the real item.
+      const catalog = resolveCatalogForName(item, stored, items, aliases);
+      if (catalog && !items.some((entry) => entry.id === catalog.id)) itemsStore.put(catalog, catalog.id);
+      const stock = pantryToStock({ ...item, catalogItemId: catalog?.id ?? item.catalogItemId }, String(item.id));
+      const unitChanged = Boolean(stored) && normalizeUnit(stored!.unit) !== normalizeUnit(stock.unit);
+      if (unitChanged && !convertUnitsStrictDetailed(1, stored!.unit, stock.unit, stock.itemName).convertible) { transaction.abort(); throw new Error(`Cannot convert ${stored!.unit} to ${stock.unit} for ${stock.itemName}.`); }
+      const catalogChanged = Boolean(stored) && stored!.itemId !== stock.itemId;
+      if (unitChanged || catalogChanged) {
+        const contributions = (await all<StockContribution>(contributionStore)).filter((candidate) => candidate.stockId === stock.id);
+        for (const contribution of contributions) {
+          if (unitChanged) contributionStore.put({ ...contribution, quantity: toStockUnit(contribution.quantity, stored!.unit, stock), consumedQuantity: toStockUnit(contribution.consumedQuantity, stored!.unit, stock) }, contribution.id);
+          if (catalogChanged) {
+            const observation = await requestResult(observationStore.get(contribution.observationId)) as PriceObservation | undefined;
+            if (observation) observationStore.put({ ...observation, itemId: stock.itemId }, observation.id);
+          }
+        }
+      }
+      stockStore.put(stock, stock.id);
+      await transactionDone(transaction);
+      return stockToPantry(stock);
+    },
+    async findStockCollision(item: PantryItem) {
+      const db = await open();
+      const transaction = db.transaction(['price_stock', 'price_items', 'price_aliases'], 'readonly');
+      const stockStore = transaction.objectStore('price_stock');
+      const [stocks, items, aliases, stored] = await Promise.all([all<PriceStock>(stockStore), all<CatalogItem>(transaction.objectStore('price_items')), all<ItemAlias>(transaction.objectStore('price_aliases')), requestResult(stockStore.get(String(item.id))) as Promise<PriceStock | undefined>]);
+      const catalog = resolveCatalogForName(item, stored, items, aliases);
+      const incoming = pantryToStock({ ...item, catalogItemId: catalog?.id }, String(item.id));
+      const target = findMergeTarget(stocks, incoming);
+      return target ? stockToPantry(target) : null;
+    },
+    async mergeStockInto(sourceId: string, targetId: string) {
+      const db = await open();
       const transaction = db.transaction(['price_stock', 'price_stock_contributions'], 'readwrite');
       const stockStore = transaction.objectStore('price_stock');
       const contributionStore = transaction.objectStore('price_stock_contributions');
-      const edited = pantryToStock(item, String(item.id));
-      const stocks = await all<PriceStock>(stockStore);
-      const target = findMergeTarget(stocks, edited);
-      if (!target) { stockStore.put(edited, edited.id); await transactionDone(transaction); return stockToPantry(edited); }
-      // The edit now describes an item that already exists: fold it into that row and retire the edited one.
-      const merged = mergeStockRows(target, edited);
+      const [source, target] = await Promise.all([requestResult(stockStore.get(sourceId)) as Promise<PriceStock | undefined>, requestResult(stockStore.get(targetId)) as Promise<PriceStock | undefined>]);
+      if (!source || !target) throw new Error('Stock row not found.');
+      const merged = mergeStockRows(target, source);
       const contributions = await all<StockContribution>(contributionStore);
-      for (const contribution of contributions.filter((candidate) => candidate.stockId === edited.id)) {
-        contributionStore.put({ ...contribution, stockId: merged.id, quantity: toStockUnit(contribution.quantity, edited.unit, merged), consumedQuantity: toStockUnit(contribution.consumedQuantity, edited.unit, merged) }, contribution.id);
+      for (const contribution of contributions.filter((candidate) => candidate.stockId === source.id)) {
+        contributionStore.put({ ...contribution, stockId: merged.id, quantity: toStockUnit(contribution.quantity, source.unit, merged), consumedQuantity: toStockUnit(contribution.consumedQuantity, source.unit, merged) }, contribution.id);
       }
       stockStore.put(merged, merged.id);
-      stockStore.delete(edited.id);
+      stockStore.delete(source.id);
       await transactionDone(transaction);
       return stockToPantry(merged);
     },

@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { applyCategories } from '../categories/applyCategories';
 import { PANTRY_CATEGORIES, type PantryCategory } from '../../types/domain';
 import type { CategoryRule } from '../categories/categoryClassifier';
 import { isReceiptItemPriceConsistent, isReceiptSubtotalConsistent, orderReceiptFragments, parseReceiptRows, type ReceiptDraft } from './receiptParser';
 import { createReceiptOcrWorkerController, type ReceiptOcrController } from './receiptOcr';
 
+export type ReceiptScannerMode = 'camera' | 'upload';
+
 interface ReceiptScannerProps {
   ocr?: ReceiptOcrController;
+  /** When set, only that capture method is offered and its picker opens on mount. */
+  mode?: ReceiptScannerMode;
   categoryRules?: CategoryRule[];
   onSave: (draft: ReceiptDraft) => Promise<void>;
   onCancel: () => void;
@@ -14,8 +18,10 @@ interface ReceiptScannerProps {
 
 type ScannerState = 'idle' | 'preparing' | 'reading' | 'review' | 'empty' | 'error';
 
-export default function ReceiptScanner({ ocr: providedOcr, categoryRules = [], onSave, onCancel }: ReceiptScannerProps) {
+export default function ReceiptScanner({ ocr: providedOcr, mode, categoryRules = [], onSave, onCancel }: ReceiptScannerProps) {
   const [ocr, setOcr] = useState<ReceiptOcrController | null>(null);
+  const autoInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (mode) autoInput.current?.click(); }, [mode]);
   const [state, setState] = useState<ScannerState>('idle');
   const [draft, setDraft] = useState<ReceiptDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +82,7 @@ export default function ReceiptScanner({ ocr: providedOcr, categoryRules = [], o
 
   return <section className="form-panel receipt-scanner" aria-live="polite">
     <div className="form-heading"><div><p className="section-kicker">Private on-device OCR</p><h2>{state === 'review' ? 'Review receipt' : 'Scan receipt'}</h2></div><button className="icon-button" aria-label="Close receipt scanner" onClick={cancel}>×</button></div>
-    {state === 'idle' && <div className="receipt-upload"><p className="muted">Take a clear receipt photo or choose one from your device. It stays on this device while PaddleOCR reads it.</p><div className="receipt-upload-actions"><label className="button primary" htmlFor="receipt-camera">Take photo</label><label className="button secondary" htmlFor="receipt-image">Choose image</label></div><input id="receipt-camera" aria-label="Take receipt photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(event) => handleImageSelection(event.target.files?.[0])} /><input id="receipt-image" aria-label="Receipt image" type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => handleImageSelection(event.target.files?.[0])} /></div>}
+    {state === 'idle' && <div className="receipt-upload"><p className="muted">Take a clear receipt photo or choose one from your device. It stays on this device while PaddleOCR reads it.</p><div className="receipt-upload-actions">{mode !== 'upload' && <label className="button primary" htmlFor="receipt-camera">Take photo</label>}{mode !== 'camera' && <label className="button secondary" htmlFor="receipt-image">Choose image</label>}</div>{mode !== 'upload' && <input ref={mode === 'camera' ? autoInput : undefined} id="receipt-camera" aria-label="Take receipt photo" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden onChange={(event) => handleImageSelection(event.target.files?.[0])} />}{mode !== 'camera' && <input ref={mode === 'upload' ? autoInput : undefined} id="receipt-image" aria-label="Receipt image" type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => handleImageSelection(event.target.files?.[0])} />}</div>}
     {(state === 'preparing' || state === 'reading') && <div className="state-panel receipt-progress" role="status" aria-live="polite" aria-busy="true"><span className="loading-dot" aria-hidden="true" /><h3>{state === 'preparing' ? 'Preparing OCR…' : 'Reading receipt…'}</h3><p>Running locally in a background worker. Elapsed: {elapsedSeconds}s.</p>{elapsedSeconds >= 90 ? <p className="validation-errors">This is taking longer than expected. Cancel and retry with a tighter, brighter receipt crop.</p> : elapsedSeconds >= 8 && <p className="muted">Still working — receipt OCR can take longer on the first run while the local model warms up.</p>}<button className="button secondary" onClick={cancel}>Cancel scan</button></div>}
     {state === 'error' && <div className="validation-errors" role="alert">{error}</div>}
     {state === 'empty' && <div className="empty-state"><h3>No readable text found</h3><p>Try a brighter, flatter photo with the receipt filling the frame.</p></div>}

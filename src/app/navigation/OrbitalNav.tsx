@@ -1,4 +1,4 @@
-export type OrbitalSection = 'recipes' | 'pantry' | 'planner' | 'shopping' | 'import';
+export type OrbitalSection = 'plan' | 'shopping' | 'pantry' | 'recipes' | 'receipts';
 
 interface OrbitalNavProps {
   activeSection: OrbitalSection;
@@ -6,20 +6,16 @@ interface OrbitalNavProps {
 }
 
 const destinations: Array<{ id: OrbitalSection; label: string; symbol: string }> = [
-  { id: 'recipes', label: 'Recipes', symbol: '✦' },
-  { id: 'planner', label: 'Plan', symbol: '▦' },
-  { id: 'import', label: 'Import', symbol: '↓' },
+  { id: 'plan', label: 'Plan', symbol: '▦' },
   { id: 'shopping', label: 'Shopping', symbol: '◈' },
   { id: 'pantry', label: 'Pantry', symbol: '◌' },
+  { id: 'recipes', label: 'Recipes', symbol: '✦' },
+  { id: 'receipts', label: 'Receipts', symbol: '▤' },
 ];
 
 export default function OrbitalNav({ activeSection, onChange }: OrbitalNavProps) {
   return (
     <nav className="top-nav" aria-label="Primary navigation">
-      <div className="top-nav-heading">
-        <span className="top-nav-kicker">Your kitchen, organized</span>
-        <span className="top-nav-help">Choose a workspace</span>
-      </div>
       <div className="top-nav-row">
         {destinations.map((destination) => (
           <button

@@ -158,3 +158,17 @@ export async function importRecipeFromUrl(url: string): Promise<RecipeImportDraf
   if (!response.ok) throw new RecipeImportError(body.error ?? 'malformed-content', body.message ?? 'The recipe could not be imported.');
   return body as RecipeImportDraft;
 }
+
+const INGREDIENT_LINE = /^\s*(\d+([.,/]\d+)?|[½¼¾⅓⅔])/;
+const STEP_LINE = /^\s*(\d+[.)]\s|step\s*\d+)/i;
+
+/** Builds a draft from plain OCR text: first line is the title, quantity-led lines are ingredients, everything else is instructions. */
+export function parseRecipeText(text: string): RecipeImportDraft {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) throw new RecipeImportError('missing-recipe', 'No text was found in the photo.');
+  const [name, ...body] = lines;
+  const isIngredient = (line: string) => INGREDIENT_LINE.test(line) && !STEP_LINE.test(line);
+  const ingredients = normalizeIngredients(body.filter(isIngredient));
+  const instructions = body.filter((line) => !isIngredient(line)).join('\n');
+  return { name, category: classifyCategoryFromName(name), servings: 4, prepTime: 30, ingredients, instructions, imageUrl: '', submittedBy: 'Personal', approved: false };
+}

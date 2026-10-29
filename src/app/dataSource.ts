@@ -31,6 +31,8 @@ export interface AppDataSource {
   updatePantryItem(item: PantryItem): Promise<PantryItem>;
   removePantryItem(id: string | number): Promise<void>;
   savePantryNotes(id: string | number, notes: string | null): Promise<void>;
+  findStockCollision(item: PantryItem): Promise<PantryItem | null>;
+  mergeStockInto(sourceId: string, targetId: string): Promise<PantryItem>;
   loadCategoryRules(): Promise<CategoryRule[]>;
   saveCategoryRule(rule: CategoryRule): Promise<void>;
   listMealPlan(): Promise<MealPlan>;
@@ -74,6 +76,8 @@ export function createSupabaseDataSource(options: {
     updatePantryItem: (item) => priceStore?.updateStock(item) ?? updatePantryRecord(resolveClient(), item),
     removePantryItem: (id) => priceStore?.removeStock(id) ?? deletePantryItem(resolveClient(), id),
     savePantryNotes: (id, notes) => priceStore?.saveStockNotes(id, notes) ?? savePantryNotes(resolveClient(), id, notes),
+    findStockCollision: async (item) => priceStore ? priceStore.findStockCollision(item) : null,
+    mergeStockInto: async (sourceId, targetId) => { if (!priceStore) throw new Error('Merging requires local inventory storage.'); return priceStore.mergeStockInto(sourceId, targetId); },
     loadCategoryRules: async () => { await ensureCache(); return cacheSnapshot.categoryRules ?? []; },
     saveCategoryRule: async (rule) => { if (rule.category === 'Uncategorized') return; await ensureCache(); const phrase = normalizeCategoryText(rule.phrase); if (!phrase) return; await persistCategoryRules([...(cacheSnapshot.categoryRules ?? []).filter((entry) => normalizeCategoryText(entry.phrase) !== phrase), { ...rule, phrase }]); },
     listMealPlan: async () => {
@@ -118,6 +122,8 @@ export function createLocalDataSource(cache: AppCache = createAppCache()): AppDa
     createPantryItem: async (input) => { if (priceStore) return priceStore.createStock(input); await ensureHydrated(); const item: PantryItem = { ...input, id: localId('pantry') }; snapshot = { ...snapshot, pantry: [...snapshot.pantry, item] }; await persist(); return item; },
     updatePantryItem: async (item) => { if (priceStore) return priceStore.updateStock(item); await ensureHydrated(); snapshot = { ...snapshot, pantry: snapshot.pantry.map((entry) => entry.id === item.id ? item : entry) }; await persist(); return item; },
     removePantryItem: async (id) => { if (priceStore) return priceStore.removeStock(id); await ensureHydrated(); snapshot = { ...snapshot, pantry: snapshot.pantry.filter((item) => item.id !== id) }; await persist(); },
+    findStockCollision: async (item) => priceStore ? priceStore.findStockCollision(item) : null,
+    mergeStockInto: async (sourceId, targetId) => { if (!priceStore) throw new Error('Merging requires local inventory storage.'); return priceStore.mergeStockInto(sourceId, targetId); },
     savePantryNotes: async (id, notes) => { if (priceStore) return priceStore.saveStockNotes(id, notes); await ensureHydrated(); snapshot = { ...snapshot, pantry: snapshot.pantry.map((item) => item.id === id ? { ...item, notes } : item) }; await persist(); },
     loadCategoryRules: async () => { await ensureHydrated(); return snapshot.categoryRules ?? []; },
     saveCategoryRule: async (rule) => { if (rule.category === 'Uncategorized') return; await ensureHydrated(); const latest = await cache.readSnapshot(); snapshot = { ...snapshot, ...(latest ?? {}) }; const phrase = normalizeCategoryText(rule.phrase); if (!phrase) return; snapshot = { ...snapshot, categoryRules: [...(snapshot.categoryRules ?? []).filter((entry) => normalizeCategoryText(entry.phrase) !== phrase), { ...rule, phrase }] }; await persist(); },

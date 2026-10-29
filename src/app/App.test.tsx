@@ -49,6 +49,8 @@ function createDataSource(overrides: Partial<AppDataSource> = {}): AppDataSource
     updatePantryItem: vi.fn().mockResolvedValue(pantryItem),
     removePantryItem: vi.fn().mockResolvedValue(undefined),
     savePantryNotes: vi.fn().mockResolvedValue(undefined),
+    findStockCollision: vi.fn().mockResolvedValue(null),
+    mergeStockInto: vi.fn().mockResolvedValue(pantryItem),
     loadCategoryRules: vi.fn().mockResolvedValue([]),
     saveCategoryRule: vi.fn().mockResolvedValue(undefined),
     listMealPlan: vi.fn().mockResolvedValue(mealPlan),
@@ -63,6 +65,8 @@ describe('personal mobile app shell', () => {
     const dataSource = createDataSource();
     render(<App dataSource={dataSource} />);
 
+    expect(await screen.findByRole('heading', { name: /planner/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Recipes' }));
     expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeInTheDocument();
     expect(screen.getByText('Tomato Soup')).toBeInTheDocument();
 
@@ -77,8 +81,11 @@ describe('personal mobile app shell', () => {
     const dataSource = createDataSource();
     render(<App dataSource={dataSource} />);
 
+    expect(await screen.findByRole('heading', { name: /planner/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Recipes' }));
     expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Add recipe/i }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('menuitem', { name: 'New recipe' }));
     await user.type(screen.getByLabelText('Recipe name'), 'Rice Bowl');
     await user.type(screen.getByLabelText('Ingredients'), '1 cup rice');
     await user.type(screen.getByLabelText('Instructions'), 'Cook rice.');
@@ -124,8 +131,7 @@ describe('personal mobile app shell', () => {
     const dataSource = createDataSource();
     render(<App dataSource={dataSource} />);
 
-    expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Plan' }));
+    expect(await screen.findByRole('heading', { name: /planner/i })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Add meal to Monday'), 'recipe-1');
 
     expect(await screen.findByRole('button', { name: 'Remove Tomato Soup from Monday' })).toBeInTheDocument();
@@ -146,7 +152,7 @@ describe('personal mobile app shell', () => {
     });
     render(<App dataSource={dataSource} />);
 
-    await screen.findByRole('heading', { name: 'Recipes' });
+    await screen.findByRole('heading', { name: /planner/i });
     await user.click(screen.getByRole('button', { name: 'Shopping' }));
 
     expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeInTheDocument();
@@ -160,9 +166,11 @@ describe('personal mobile app shell', () => {
     const dataSource = createDataSource();
     render(<App dataSource={dataSource} />);
 
+    await screen.findByRole('heading', { name: /planner/i });
+    await user.click(screen.getByRole('button', { name: 'Recipes' }));
     await screen.findByRole('heading', { name: 'Recipes' });
-    await user.click(screen.getByRole('button', { name: 'Import recipe' }));
-    await user.click(screen.getByRole('button', { name: 'Paste content' }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Paste text' }));
     await user.type(screen.getByLabelText('Recipe content'), '<h1>Toast</h1><ul><li>1 slice bread</li></ul>');
     await user.click(screen.getByRole('button', { name: 'Parse recipe' }));
 
@@ -186,7 +194,7 @@ describe('personal mobile app shell', () => {
     };
     render(<App dataSource={dataSource} cache={cache} />);
 
-    expect(await screen.findByText('Offline Soup')).toBeInTheDocument();
+    expect((await screen.findAllByText('Offline Soup')).length).toBeGreaterThan(0);
     expect(screen.getByRole('status')).toHaveTextContent(/offline/i);
   });
 
@@ -200,8 +208,11 @@ describe('personal mobile app shell', () => {
     }), { status: 200, headers: { 'content-type': 'application/json' } })));
     render(<App dataSource={dataSource} />);
 
+    await screen.findByRole('heading', { name: /planner/i });
+    await user.click(screen.getByRole('button', { name: 'Recipes' }));
     await screen.findByRole('heading', { name: 'Recipes' });
-    await user.click(screen.getByRole('button', { name: 'Import recipe' }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('menuitem', { name: 'From URL' }));
     await user.type(screen.getByLabelText('Recipe URL'), 'https://example.com/soup');
     await user.click(screen.getByRole('button', { name: 'Parse recipe' }));
 
@@ -210,20 +221,19 @@ describe('personal mobile app shell', () => {
     vi.unstubAllGlobals();
   });
 
-  it('routes every orbital destination to its matching workspace', async () => {
+  it('routes every destination to its matching workspace, starting on Plan', async () => {
     const user = userEvent.setup();
     render(<App dataSource={createDataSource()} />);
 
-    await screen.findByRole('heading', { name: 'Recipes' });
-    await user.click(screen.getByRole('button', { name: 'Pantry' }));
-    expect(await screen.findByRole('heading', { name: 'Pantry' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Plan' }));
     expect(await screen.findByRole('heading', { name: /planner/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Shopping' }));
     expect(await screen.findByRole('heading', { name: 'Shopping list' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Import' }));
-    expect(await screen.findByRole('heading', { name: 'Import recipe' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Pantry' }));
+    expect(await screen.findByRole('heading', { name: 'Pantry' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Recipes' }));
     expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Receipts' }));
+    expect(await screen.findByRole('heading', { name: 'Receipts' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
   });
 });
