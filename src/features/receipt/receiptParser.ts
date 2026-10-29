@@ -78,30 +78,32 @@ export function orderReceiptFragments(fragments: ReceiptFragment[]): ReceiptRow[
   });
 }
 
-const amountPattern = /(?:(?:₱|PHP|P)\s*)?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2})/gi;
+const MONEY = String.raw`(?:₱|PHP|P)?\s*(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})`;
 const totalPattern = /^(?:(?:NET\s+)?TOTAL|SUBTOTAL|GRAND TOTAL|TOTAL PAID|AMOUNT DUE|BALANCE DUE)\b/i;
-const ignoredSummaryPattern = /^(?:CHANGE|E\s+WALLET|PAYMENT|VAT|VATS?\/?N|SALES TRANSACTION)\b/i;
-const compactDetailPattern = /(\d+\.\d{3})\s*@?\s*(\d{2,4}(?:\.\d{1,2})?)\s+(\d{1,4}(?:,\d{3})?\.\d{2})\s*$/i;
-const compactContinuationDetailPattern = /^(\d+\.\d{3})\s*@?\s*(\d{2,4}(?:\.\d{1,2})?)\s+(\d{1,4}(?:,\d{3})?\.\d{2})\s*$/i;
-const compactContinuationPattern = /^(\d+\.\d{3})\s*@?\s*(\d{2,4}(?:\.\d{1,2})?)\s*$/i;
+const ignoredSummaryPattern = /^(?:CHANGE|E\s*WALLET|PAYMENT|CASH|VAT|VATS?\/?N|SALES TRANSACTION|THANK|CASHIER|TERMINAL|TRANS|REF|RECEIPT|OR\s*#)\b/i;
+const headerPattern = /^(?:TIN|MIN|PN|SN|S\/N|DATE|TIME|INVOICE|OR|STORE|BRANCH|TEL|TELEPHONE)\b\s*[:#]?/i;
+const detailRowPattern = new RegExp(String.raw`^(\d+(?:\.\d+)?)\s*[x×@]\s*(\d+(?:\.\d+)?)(?:\s+${MONEY})?\s*$`, 'i');
+const nameDetailPattern = new RegExp(String.raw`^(.*?[A-Za-z].*?)\s+(\d+\.\d{3})\s*[x×@]?\s*(\d+(?:\.\d+)?)\s+${MONEY}\s*$`, 'i');
+const nameTotalPattern = new RegExp(String.raw`^(.*?[A-Za-z].*?)\s+${MONEY}\s*$`, 'i');
+const trailingMoneyPattern = new RegExp(String.raw`${MONEY}\s*$`, 'i');
 
-function numbers(text: string): number[] {
-  return [...text.matchAll(amountPattern)].map((match) => Number(match[0].replace(/₱|PHP|P|\s|,/gi, ''))).filter(Number.isFinite);
+function money(whole: string, cents: string): number {
+  return Number(`${whole.replace(/,/g, '')}.${cents}`);
 }
 
-function cleanName(text: string): string {
-  return text.replace(/^\s*\*+\s*/, '').replace(amountPattern, '').replace(/^\s*\d+(?:\.\d+)?\s*[x×]\s*/i, '').replace(/\s+/g, ' ').trim();
+/** Repairs the OCR noise seen on thermal receipts before any pattern runs. */
+export function normalizeRowText(text: string): string {
+  return text
+    .replace(/(?<=\d)[Oo](?=[\d.])|(?<=[\d.])[Oo](?=\d)/g, '0')
+    .replace(/(\d)\s*\.\s*(\d{2})\b/g, '$1.$2')
+    .replace(/(\d+\.\d{3})(\d{2,4}\.\d{2})/g, '$1 @ $2')
+    .replace(/\s*@\s*/g, ' @ ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function isContinuation(text: string): boolean {
-  return /^\d+(?:\.\d+)?\s*[x×@]/i.test(text.trim()) || compactContinuationDetailPattern.test(text.trim()) || compactContinuationPattern.test(text.trim());
-}
-
-function continuationQuantity(text: string): number | null {
-  const match = text.trim().match(/^(\d+(?:\.\d+)?)(?:\s*[x×@]|(?=\d{2,4}\.\d{2}))/i);
-  if (!match) return null;
-  const quantity = Number(match[1]);
-  return Number.isFinite(quantity) ? quantity : null;
+function stripMarker(name: string): string {
+  return name.replace(/^\s*[*#]+\s*/, '').replace(/\s+/g, ' ').trim();
 }
 
 export function isReceiptItemPriceConsistent(item: ReceiptDraftItem): boolean {
@@ -120,55 +122,65 @@ export function parseReceiptRows(rows: ReceiptRow[]): ReceiptDraft {
   let merchant = '';
   let total: number | null = null;
   let pendingName: { name: string; confidence: number } | null = null;
+  let sawTotal = false;
   const rawRows = rows.map((row) => row.text);
 
+  const normalized = rows.map((row) => normalizeRowText(row.text));
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const text = row.text.trim();
+    const text = normalized[index];
     if (!text) continue;
-    const values = numbers(text);
+
     if (totalPattern.test(text)) {
-      if (values.length) total = /^TOTAL PAID\b/i.test(text) ? values[0] : values.at(-1)!;
+      const amounts = [...text.matchAll(new RegExp(MONEY, 'gi'))].map((match) => money(match[1], match[2]));
+      if (amounts.length) total = /^TOTAL PAID\b/i.test(text) ? amounts[0] : amounts[amounts.length - 1];
+      sawTotal = true;
+      pendingName = null;
       continue;
     }
-    if (ignoredSummaryPattern.test(text)) {
-      continue;
+    if (sawTotal || ignoredSummaryPattern.test(text)) continue;
+
+    if (!merchant && items.length === 0 && !pendingName && /[A-Za-z]/.test(text) && !trailingMoneyPattern.test(text) && !nameDetailPattern.test(text)) {
+      // The first plain text line is the merchant, unless it is immediately followed by a quantity line (then it is the first item).
+      const next = normalized[index + 1] ?? '';
+      if (!detailRowPattern.test(next)) { merchant = stripMarker(text); continue; }
     }
-    const compactDetail = text.match(compactDetailPattern);
-    if (compactDetail) {
-      const name = text.slice(0, compactDetail.index).replace(/^\s*\*+\s*/, '').trim();
-      const quantity = Number(compactDetail[1]);
-      const unitPrice = Number(compactDetail[2]);
-      const totalPrice = Number(compactDetail[3].replace(/,/g, ''));
-      if (name && Number.isFinite(quantity) && Number.isFinite(unitPrice) && Number.isFinite(totalPrice)) {
-        items.push({ name, quantity, unitPrice, totalPrice, confidence: row.confidence });
-        continue;
-      }
-    }
-    if (!merchant && values.length === 0) {
-      if (index === 0 && !isContinuation(rows[index + 1]?.text ?? '')) merchant = text;
-      else pendingName = { name: text.replace(/^\s*\*+\s*/, ''), confidence: row.confidence };
-      continue;
-    }
-    if (isContinuation(text) && (items.length || pendingName)) {
-      const quantity = continuationQuantity(text) ?? 1;
-      const compactContinuationDetail = text.match(compactContinuationDetailPattern);
-      const compactContinuation = text.match(compactContinuationPattern);
-      const price = compactContinuationDetail ? Number(compactContinuationDetail[2]) : compactContinuation ? Number(compactContinuation[2]) : values.at(-1);
-      const printedTotal = compactContinuationDetail ? Number(compactContinuationDetail[3].replace(/,/g, '')) : undefined;
-      if (price !== undefined && pendingName) {
-        items.push({ name: pendingName.name, quantity, unitPrice: price, totalPrice: printedTotal ?? Number((quantity * price).toFixed(2)), confidence: Math.min(pendingName.confidence, row.confidence) });
+    if (headerPattern.test(text)) continue;
+
+    const detail = text.match(detailRowPattern);
+    if (detail) {
+      const quantity = Number(detail[1]);
+      const unitPrice = Number(detail[2]);
+      const printedTotal = detail[3] !== undefined ? money(detail[3], detail[4]) : undefined;
+      const totalPrice = printedTotal ?? Number((quantity * unitPrice).toFixed(2));
+      if (pendingName) {
+        items.push({ name: pendingName.name, quantity, unitPrice, totalPrice, confidence: Math.min(pendingName.confidence, row.confidence) });
         pendingName = null;
-      } else if (price !== undefined && items.length) {
+      } else if (items.length) {
         const previous = items[items.length - 1];
-        items[items.length - 1] = { ...previous, quantity, unitPrice: price, ...(printedTotal === undefined ? {} : { totalPrice: printedTotal }), confidence: Math.min(previous.confidence, row.confidence) };
+        items[items.length - 1] = { ...previous, quantity, unitPrice, totalPrice: printedTotal ?? previous.totalPrice, confidence: Math.min(previous.confidence, row.confidence) };
       }
       continue;
     }
-    if (values.length && cleanName(text)) {
-      const quantityMatch = text.match(/^(\d+(?:\.\d+)?)\s*[x×]/i);
-      const quantity = quantityMatch ? Number(quantityMatch[1]) : 1;
-      items.push({ name: cleanName(text), quantity, totalPrice: values.at(-1)!, confidence: row.confidence });
+
+    const nameDetail = text.match(nameDetailPattern);
+    if (nameDetail) {
+      items.push({ name: stripMarker(nameDetail[1]), quantity: Number(nameDetail[2]), unitPrice: Number(nameDetail[3]), totalPrice: money(nameDetail[4], nameDetail[5]), confidence: row.confidence });
+      pendingName = null;
+      continue;
+    }
+
+    const nameTotal = text.match(nameTotalPattern);
+    if (nameTotal) {
+      const quantityMatch = nameTotal[1].match(/^(\d+(?:\.\d+)?)\s*[x×]\s*/i);
+      const name = stripMarker(quantityMatch ? nameTotal[1].slice(quantityMatch[0].length) : nameTotal[1]);
+      if (name) { items.push({ name, quantity: quantityMatch ? Number(quantityMatch[1]) : 1, totalPrice: money(nameTotal[2], nameTotal[3]), confidence: row.confidence }); pendingName = null; }
+      continue;
+    }
+
+    if (/[A-Za-z]{2,}/.test(text) && !/\d{5,}/.test(text)) {
+      // A bare description line: its quantity and price should follow on the next row.
+      pendingName = { name: stripMarker(text), confidence: row.confidence };
     }
   }
 
