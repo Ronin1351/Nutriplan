@@ -49,6 +49,8 @@ function createDataSource(overrides: Partial<AppDataSource> = {}): AppDataSource
     updatePantryItem: vi.fn().mockResolvedValue(pantryItem),
     removePantryItem: vi.fn().mockResolvedValue(undefined),
     savePantryNotes: vi.fn().mockResolvedValue(undefined),
+    findStockCollision: vi.fn().mockResolvedValue(null),
+    mergeStockInto: vi.fn().mockResolvedValue(pantryItem),
     loadCategoryRules: vi.fn().mockResolvedValue([]),
     saveCategoryRule: vi.fn().mockResolvedValue(undefined),
     listMealPlan: vi.fn().mockResolvedValue(mealPlan),

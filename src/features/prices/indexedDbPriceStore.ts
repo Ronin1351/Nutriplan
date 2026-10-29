@@ -116,23 +116,26 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
       await transactionDone(transaction);
       return stockToPantry(stock);
     },
-    async updateStock(item: PantryItem) {
+    async updateStock(item: PantryItem) { const stock = pantryToStock(item, String(item.id)); await put('price_stock', stock, stock.id); return stockToPantry(stock); },
+    async findStockCollision(item: PantryItem) {
+      const stocks = await read<PriceStock>('price_stock');
+      const target = findMergeTarget(stocks, pantryToStock(item, String(item.id)));
+      return target ? stockToPantry(target) : null;
+    },
+    async mergeStockInto(sourceId: string, targetId: string) {
       const db = await open();
       const transaction = db.transaction(['price_stock', 'price_stock_contributions'], 'readwrite');
       const stockStore = transaction.objectStore('price_stock');
       const contributionStore = transaction.objectStore('price_stock_contributions');
-      const edited = pantryToStock(item, String(item.id));
-      const stocks = await all<PriceStock>(stockStore);
-      const target = findMergeTarget(stocks, edited);
-      if (!target) { stockStore.put(edited, edited.id); await transactionDone(transaction); return stockToPantry(edited); }
-      // The edit now describes an item that already exists: fold it into that row and retire the edited one.
-      const merged = mergeStockRows(target, edited);
+      const [source, target] = await Promise.all([requestResult(stockStore.get(sourceId)) as Promise<PriceStock | undefined>, requestResult(stockStore.get(targetId)) as Promise<PriceStock | undefined>]);
+      if (!source || !target) throw new Error('Stock row not found.');
+      const merged = mergeStockRows(target, source);
       const contributions = await all<StockContribution>(contributionStore);
-      for (const contribution of contributions.filter((candidate) => candidate.stockId === edited.id)) {
-        contributionStore.put({ ...contribution, stockId: merged.id, quantity: toStockUnit(contribution.quantity, edited.unit, merged), consumedQuantity: toStockUnit(contribution.consumedQuantity, edited.unit, merged) }, contribution.id);
+      for (const contribution of contributions.filter((candidate) => candidate.stockId === source.id)) {
+        contributionStore.put({ ...contribution, stockId: merged.id, quantity: toStockUnit(contribution.quantity, source.unit, merged), consumedQuantity: toStockUnit(contribution.consumedQuantity, source.unit, merged) }, contribution.id);
       }
       stockStore.put(merged, merged.id);
-      stockStore.delete(edited.id);
+      stockStore.delete(source.id);
       await transactionDone(transaction);
       return stockToPantry(merged);
     },
