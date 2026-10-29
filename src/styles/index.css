@@ -190,7 +190,7 @@ img, video, iframe { max-width: 100%; }
 .sort-control select { min-width: 8.5rem; }
 .category-header { margin: 1.25rem 0 .5rem; font-size: .95rem; color: var(--text-secondary); }
 .pantry-group:first-child .category-header { margin-top: 0; }
-.sheet-backdrop { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .55); }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .55); }
 .sheet { width: min(100%, 42rem); max-height: 90vh; overflow-y: auto; margin: 0; border-radius: 1.1rem 1.1rem 0 0; }
 @media (min-width: 721px) { .sheet-backdrop { align-items: center; } .sheet { border-radius: 1.1rem; } }
 .purchase-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
@@ -215,3 +215,6 @@ img, video, iframe { max-width: 100%; }
   .app-main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
   .sheet-backdrop { padding-bottom: 0; }
 }
+.year-group .shopping-items li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.year-group .shopping-items .text-button:first-child { flex: 1; text-align: left; }
+.year-group .shopping-items small { display: block; color: var(--text-secondary); font-weight: 500; }

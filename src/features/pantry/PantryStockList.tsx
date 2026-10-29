@@ -29,7 +29,7 @@ export default function PantryStockList({ items, sort, currency, canOpen, notesI
         const expiration = getExpirationStatus(item.expirationDate);
         return <article className="pantry-card" key={item.id}>
           <button className="pantry-card-opener" onClick={() => canOpen && onOpen(item)}>
-            <div className="pantry-card-top"><div><p className="card-category">{item.category}</p><h3>{item.item}</h3></div><strong>{formatCurrency(item.amount * item.price, currency)}</strong></div>
+            <div className="pantry-card-top"><div>{group.category === null && <p className="card-category">{item.category}</p>}<h3>{item.item}</h3></div><strong>{formatCurrency(item.amount * item.price, currency)}</strong></div>
             <div className="pantry-meta"><span>{item.amount} {item.unit}</span><span>{formatCurrency(item.price, currency)} / {item.unit}</span>{expiration.label && <span className={expiration.urgent ? 'warning-text' : 'muted'}>{expiration.label}</span>}</div>
           </button>
           <div className="card-actions">
