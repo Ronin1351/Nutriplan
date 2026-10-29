@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isReceiptItemPriceConsistent, orderReceiptFragments, parseReceiptRows, type ReceiptFragment } from './receiptParser';
+import { isReceiptItemPriceConsistent, isReceiptSubtotalConsistent, orderReceiptFragments, parseReceiptRows, type ReceiptFragment } from './receiptParser';
 
 const fragment = (text: string, x: number, y: number, width = 80): ReceiptFragment => ({
   text, confidence: 0.96, poly: [[x, y], [x + width, y], [x + width, y + 20], [x, y + 20]],
@@ -101,5 +101,38 @@ describe('receipt parser on a tilted Iloilo Fresh Market receipt', () => {
       ['CALAMANSI EG', 1, undefined, 37.5],
     ]);
     expect(draft.total).toBe(2593.85);
+  });
+});
+
+describe('real Iloilo Fresh Market photo (RapidOCR fragments)', () => {
+  it('recovers all 21 line items with their printed totals', async () => {
+    const { default: fragments } = await import('./fixtures/iloilo-fresh-market.json');
+    const draft = parseReceiptRows(orderReceiptFragments(fragments as ReceiptFragment[]));
+    expect(draft.merchant).toBe('ILOILO FRESH MARKET CORPORATION');
+    expect(draft.total).toBe(2593.85);
+    expect(draft.items.map((item) => [item.name, item.quantity, item.unitPrice, item.totalPrice])).toEqual([
+      ['MAG CHKN THIGHS', 2.192, 226, 495.4],
+      ['RC DRESSED CHICKEN', 2.328, 177, 412.05],
+      ['GATORADE BLU BOLT500', 3, 44, 132],
+      ['GATORADETROP FRT500', 2, 44, 88],
+      ['POMEGRANATE OM', 0.324, 390, 126.35],
+      ['POMEGRANATE OM', 0.324, 390, 126.35],
+      ['POTATO ZJ', 0.356, 260, 92.55],
+      ['CALAMANSI EG', 1, undefined, 37.5],
+      ['OKRA MC', 0.214, 195, 41.75],
+      ['BELL PEPPER BAG GS', 0.114, 285, 32.5],
+      ['BELL PEPPERBAG GS', 0.138, 285, 39.35],
+      ['ONION LEAVES IS', 0.086, 495, 42.55],
+      ['RED LADY PAPAYA G', 0.636, 70, 44.5],
+      ['FUJI APPLE L OM', 4, 45, 180],
+      ['YLW WATERMELON CF', 1.458, 85, 123.95],
+      ['TOMATO GE', 0.238, 120, 28.55],
+      ['ZIM SCRNGPADS3OMM', 2, 30, 60],
+      ['FRESH TOOTHBRUSH', 1, undefined, 14.5],
+      ['OFF OVRTME 100ML', 1, undefined, 217],
+      ['KOJIESANSP3S65G', 1, undefined, 103],
+      ['CHEET0S JLPN0215g', 1, undefined, 156],
+    ]);
+    expect(isReceiptSubtotalConsistent(draft.total, draft.items)).toBe(true);
   });
 });
