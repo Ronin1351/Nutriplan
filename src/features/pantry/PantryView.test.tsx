@@ -99,4 +99,16 @@ describe('PantryView stock segment', () => {
     expect(props.onUpdate).toHaveBeenCalled();
     expect(props.onMerge).not.toHaveBeenCalled();
   });
+
+  it('Purchases segment loads lines from inventory on first open and opens receipts', async () => {
+    const user = userEvent.setup();
+    const listPurchaseLines = vi.fn().mockResolvedValue([{ observationId: 'o1', eventId: 'event-1', itemName: 'Eggs', quantity: '12', unit: 'each', paidMinor: 1200, currency: 'PHP', occurredOn: '2026-10-01', merchantName: 'SM' }]);
+    const onOpenReceipt = vi.fn();
+    renderView({ inventory: { listPurchaseLines } as never, onOpenReceipt });
+    expect(listPurchaseLines).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('tab', { name: 'Purchases' }));
+    await user.click(await screen.findByRole('button', { name: /Eggs/ }));
+    expect(onOpenReceipt).toHaveBeenCalledWith('event-1');
+    expect(listPurchaseLines).toHaveBeenCalledTimes(1);
+  });
 });

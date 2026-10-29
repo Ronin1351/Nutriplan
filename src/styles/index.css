@@ -198,3 +198,5 @@ img, video, iframe { max-width: 100%; }
 .sheet-backdrop { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .55); }
 .sheet { width: min(100%, 42rem); max-height: 90vh; overflow-y: auto; margin: 0; border-radius: 1.1rem 1.1rem 0 0; }
 @media (min-width: 721px) { .sheet-backdrop { align-items: center; } .sheet { border-radius: 1.1rem; } }
+.purchase-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+.purchase-row small { display: block; color: var(--text-secondary); }

@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatCurrency, type CurrencyCode } from '../../lib/currency';
 import type { PantrySort } from '../../lib/pantrySort';
 import type { NewPantryItem, PantryItem } from '../../types/domain';
 import type { PriceCapture, PriceStore } from '../prices/types';
 import { toMinorUnits } from '../prices/priceMath';
 import ItemDetailPanel from '../prices/ItemDetailPanel';
+import PantryPurchasesList from './PantryPurchasesList';
 import PantryStockList from './PantryStockList';
 import StockItemSheet from './StockItemSheet';
-import type { InventoryService } from './pantryInventoryService';
+import type { InventoryService, PurchaseLine } from './pantryInventoryService';
 
 export type PantrySegment = 'stock' | 'purchases';
 
@@ -21,6 +22,7 @@ interface PantryViewProps {
   onQuote: (capture: PriceCapture) => Promise<void>;
   onFindCollision: (item: PantryItem) => Promise<PantryItem | null>;
   onMerge: (sourceId: string, targetId: string) => Promise<void>;
+  onOpenReceipt?: (eventId: string) => void;
   priceStore?: PriceStore;
   inventory?: InventoryService;
   initialSegment?: PantrySegment;
@@ -33,7 +35,7 @@ function loadSort(): PantrySort {
   try { const saved = window.localStorage.getItem(SORT_KEY) as PantrySort | null; return saved && SORTS.includes(saved) ? saved : 'category'; } catch { return 'category'; }
 }
 
-export default function PantryView({ pantry, currency, onCreate, onUpdate, onRemove, onSaveNotes, onQuote, onFindCollision, onMerge, priceStore, inventory, initialSegment = 'stock' }: PantryViewProps) {
+export default function PantryView({ pantry, currency, onCreate, onUpdate, onRemove, onSaveNotes, onQuote, onFindCollision, onMerge, onOpenReceipt, priceStore, inventory, initialSegment = 'stock' }: PantryViewProps) {
   const [segment, setSegment] = useState<PantrySegment>(initialSegment);
   const [sort, setSort] = useState<PantrySort>(loadSort);
   const [query, setQuery] = useState('');
@@ -42,6 +44,15 @@ export default function PantryView({ pantry, currency, onCreate, onUpdate, onRem
   const [notesId, setNotesId] = useState<string | number | null>(null);
   const [notes, setNotes] = useState('');
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [purchases, setPurchases] = useState<PurchaseLine[] | null>(null);
+  const [purchasesError, setPurchasesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (segment !== 'purchases' || purchases !== null || !inventory) return;
+    let cancelled = false;
+    inventory.listPurchaseLines().then((lines) => { if (!cancelled) setPurchases(lines); }).catch((error: unknown) => { if (!cancelled) setPurchasesError(error instanceof Error ? error.message : 'Unable to load purchases.'); });
+    return () => { cancelled = true; };
+  }, [segment, purchases, inventory]);
   const filtered = useMemo(() => pantry.filter((item) => item.item.toLowerCase().includes(query.toLowerCase()) || item.category.toLowerCase().includes(query.toLowerCase())), [pantry, query]);
   const total = pantry.filter((item) => item.isActive).reduce((sum, item) => sum + item.amount * item.price, 0);
 
@@ -74,7 +85,7 @@ export default function PantryView({ pantry, currency, onCreate, onUpdate, onRem
         <button role="tab" aria-selected={segment === 'stock'} className={segment === 'stock' ? 'active' : ''} onClick={() => setSegment('stock')}>Stock</button>
         <button role="tab" aria-selected={segment === 'purchases'} className={segment === 'purchases' ? 'active' : ''} onClick={() => setSegment('purchases')}>Purchases</button>
       </div>
-      {segment === 'purchases' ? <p className="empty-inline">Purchase history is coming next.</p> : selected && priceStore ? <ItemDetailPanel item={selected} store={priceStore} currency={currency} onClose={() => setSelectedId(null)} /> : <>
+      {segment === 'purchases' ? (purchasesError ? <p className="error-text" role="alert">{purchasesError}</p> : purchases === null ? <p className="empty-inline">Loading purchases…</p> : <PantryPurchasesList lines={purchases} currency={currency} onOpenReceipt={(eventId) => onOpenReceipt?.(eventId)} />) : selected && priceStore ? <ItemDetailPanel item={selected} store={priceStore} currency={currency} onClose={() => setSelectedId(null)} /> : <>
         <div className="list-controls">
           <label className="search-field">Search pantry<input aria-label="Search pantry" placeholder="Search items or categories" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
           <label className="sort-control">Sort<select aria-label="Sort pantry" value={sort} onChange={(event) => changeSort(event.target.value as PantrySort)}><option value="category">Category</option><option value="name">A–Z</option><option value="price">Price</option></select></label>
