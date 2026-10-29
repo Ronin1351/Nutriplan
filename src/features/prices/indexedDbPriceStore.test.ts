@@ -58,4 +58,20 @@ describe('indexedDb price store collisions', () => {
     const result = await inventory.consumeIngredients({ operationId: 'op-1', ingredients: [{ item: 'Flour', amount: 1500, unit: 'g' }] });
     expect(result.results[0]?.missing).toBe(0);
   });
+
+  it('createStock registers a catalog item so purchase lines carry the item name', async () => {
+    const { store, inventory } = setup();
+    await store.createStock(pantry({ item: 'Eggs' }));
+    const lines = await inventory.listPurchaseLines();
+    expect(lines[0]?.itemName).toBe('Eggs');
+  });
+
+  it('createStock reuses a catalog item created by a receipt, so the receipt row and the manual row merge', async () => {
+    const { store } = setup();
+    await store.saveCapture({ operationId: 'op-r', kind: 'purchase', source: 'manual', occurredOn: '2026-10-01', dateEstimated: false, capturedAt: '2026-10-01T00:00:00.000Z', currency: 'PHP', merchantName: 'SM', receiptNumber: null, lines: [{ lineId: 'l1', ordinal: 0, itemName: 'Eggs', quantity: '6', unit: 'units', paidMinor: 600, packageQuantity: null, packageUnit: null }] });
+    await store.createStock(pantry({ item: 'eggs', amount: 6 }));
+    const stock = await store.listStock();
+    expect(stock).toHaveLength(1);
+    expect(stock[0].amount).toBe(12);
+  });
 });

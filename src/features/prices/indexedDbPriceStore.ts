@@ -97,13 +97,18 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
     async listStock() { return (await read<PriceStock>('price_stock')).map(stockToPantry); },
     async createStock(input: NewPantryItem) {
       const db = await open();
-      const transaction = db.transaction(['price_stock', 'price_events', 'price_observations', 'price_stock_contributions'], 'readwrite');
+      const transaction = db.transaction(['price_stock', 'price_events', 'price_observations', 'price_stock_contributions', 'price_items', 'price_aliases'], 'readwrite');
       const stockStore = transaction.objectStore('price_stock');
       const eventStore = transaction.objectStore('price_events');
       const observationStore = transaction.objectStore('price_observations');
       const contributionStore = transaction.objectStore('price_stock_contributions');
-      const stocks = await all<PriceStock>(stockStore);
-      const incoming = pantryToStock(input, id('stock'));
+      const itemsStore = transaction.objectStore('price_items');
+      const [stocks, items, aliases] = await Promise.all([all<PriceStock>(stockStore), all<CatalogItem>(itemsStore), all<ItemAlias>(transaction.objectStore('price_aliases'))]);
+      // Manual adds attach to the catalog like receipt lines do, so both paths agree on what "the same item" is.
+      const match = input.catalogItemId ? { kind: 'exact' as const, item: items.find((item) => item.id === input.catalogItemId) } : matchItem({ name: input.item }, items, aliases);
+      const catalog = (match.kind === 'exact' || match.kind === 'alias') && match.item ? match.item : { id: id('item'), name: input.item.trim(), brand: null, packageQuantity: null, packageUnit: null, category: input.category, createdAt: new Date().toISOString() } satisfies CatalogItem;
+      if (!items.some((item) => item.id === catalog.id)) itemsStore.put(catalog, catalog.id);
+      const incoming = pantryToStock({ ...input, catalogItemId: catalog.id }, id('stock'));
       const existing = findMergeTarget(stocks, incoming);
       const stock = existing ? mergeStockRows(existing, incoming) : incoming;
       stockStore.put(stock, stock.id);
