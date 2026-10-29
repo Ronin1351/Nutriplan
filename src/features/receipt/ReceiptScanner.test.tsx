@@ -110,4 +110,19 @@ describe('ReceiptScanner', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     resolveRun();
   });
+
+  it('mode camera shows only the camera input and opens it on mount', () => {
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click');
+    render(<ReceiptScanner ocr={controller()} mode="camera" onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText('Take receipt photo')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Receipt image')).not.toBeInTheDocument();
+    expect(click).toHaveBeenCalledTimes(1);
+    click.mockRestore();
+  });
+
+  it('mode upload shows only the upload input', () => {
+    render(<ReceiptScanner ocr={controller()} mode="upload" onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText('Receipt image')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Take receipt photo')).not.toBeInTheDocument();
+  });
 });

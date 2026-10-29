@@ -200,3 +200,13 @@ img, video, iframe { max-width: 100%; }
 @media (min-width: 721px) { .sheet-backdrop { align-items: center; } .sheet { border-radius: 1.1rem; } }
 .purchase-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
 .purchase-row small { display: block; color: var(--text-secondary); }
+.dropdown { position: relative; }
+.dropdown-menu { position: absolute; right: 0; top: calc(100% + .35rem); z-index: 30; display: grid; min-width: 11rem; padding: .35rem; background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; box-shadow: var(--shadow); }
+.dropdown-menu button { min-height: 40px; padding: .5rem .75rem; border: 0; border-radius: .55rem; background: transparent; color: var(--text); text-align: left; font-weight: 600; }
+.dropdown-menu button:hover, .dropdown-menu button:focus-visible { background: var(--surface-soft); }
+.year-group { margin-bottom: .75rem; border: 1px solid var(--line); border-radius: .9rem; }
+.year-group summary { display: flex; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; cursor: pointer; font-weight: 800; list-style: none; }
+.year-group summary::-webkit-details-marker { display: none; }
+.year-group summary::before { content: '▸'; margin-right: .5rem; color: var(--text-secondary); }
+.year-group[open] summary::before { content: '▾'; }
+.year-group .shopping-items { padding: 0 1rem .75rem; }
