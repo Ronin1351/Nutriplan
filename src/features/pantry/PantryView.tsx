@@ -55,7 +55,7 @@ export default function PantryView({ pantry, currency, onCreate, onUpdate, onRem
     inventory.listPurchaseLines().then((lines) => { if (!cancelled) setPurchases(lines); }).catch((error: unknown) => { if (!cancelled) setPurchasesError(error instanceof Error ? error.message : 'Unable to load purchases.'); });
     return () => { cancelled = true; };
   }, [segment, purchases, inventory]);
-  const filtered = useMemo(() => pantry.filter((item) => item.item.toLowerCase().includes(query.toLowerCase()) || item.category.toLowerCase().includes(query.toLowerCase())), [pantry, query]);
+  const filtered = useMemo(() => pantry.filter((item) => item.isActive && (item.item.toLowerCase().includes(query.toLowerCase()) || item.category.toLowerCase().includes(query.toLowerCase()))), [pantry, query]);
   const total = pantry.filter((item) => item.isActive).reduce((sum, item) => sum + item.amount * item.price, 0);
 
   function changeSort(next: PantrySort) {

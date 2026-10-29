@@ -297,11 +297,16 @@ export function createIndexedDbInventoryService(options: IndexedDbInventoryServi
         const stock = stocks.find((candidate) => candidate.id === contribution.stockId);
         if (stock) {
           const remainingContributions = contributions.filter((candidate) => candidate.stockId === stock.id && candidate.eventId !== eventId);
-          stock.amount = String(Math.max(0, (Number(stock.amount) || 0) - Number(contribution.quantity)));
-          stock.isActive = Number(stock.amount) > 0;
-          const averageMinor = calculateWeightedAverage(remainingContributions);
-          stock.priceMajor = averageMinor / ((stock.currency ?? event.currency).toUpperCase() === 'JPY' ? 1 : 100);
-          stockStore.put(stock, stock.id);
+          if (remainingContributions.length === 0) {
+            // Nothing else supplied this row: the receipt was its only source, so the row goes with it.
+            stockStore.delete(stock.id);
+          } else {
+            stock.amount = String(Math.max(0, (Number(stock.amount) || 0) - Number(contribution.quantity)));
+            stock.isActive = Number(stock.amount) > 0;
+            const averageMinor = calculateWeightedAverage(remainingContributions);
+            stock.priceMajor = averageMinor / ((stock.currency ?? event.currency).toUpperCase() === 'JPY' ? 1 : 100);
+            stockStore.put(stock, stock.id);
+          }
           const stockIndex = stocks.findIndex((candidate) => candidate.id === stock.id);
           if (stockIndex >= 0) stocks[stockIndex] = stock;
         }
@@ -331,11 +336,15 @@ export function createIndexedDbInventoryService(options: IndexedDbInventoryServi
         const stock = await requestResult(stockStore.get(contribution.stockId)) as PriceStock | undefined;
         if (stock) {
           const remaining = contributions.filter((candidate) => candidate.stockId === stock.id && candidate.id !== contribution.id);
-          stock.amount = String(Math.max(0, (Number(stock.amount) || 0) - Number(contribution.quantity)));
-          stock.isActive = Number(stock.amount) > 0;
-          const averageMinor = calculateWeightedAverage(remaining);
-          stock.priceMajor = averageMinor / ((stock.currency ?? event.currency).toUpperCase() === 'JPY' ? 1 : 100);
-          stockStore.put(stock, stock.id);
+          if (remaining.length === 0) {
+            stockStore.delete(stock.id);
+          } else {
+            stock.amount = String(Math.max(0, (Number(stock.amount) || 0) - Number(contribution.quantity)));
+            stock.isActive = Number(stock.amount) > 0;
+            const averageMinor = calculateWeightedAverage(remaining);
+            stock.priceMajor = averageMinor / ((stock.currency ?? event.currency).toUpperCase() === 'JPY' ? 1 : 100);
+            stockStore.put(stock, stock.id);
+          }
         }
         contributionStore.delete(contribution.id);
       }

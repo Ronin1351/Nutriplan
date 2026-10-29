@@ -123,4 +123,10 @@ describe('PantryView stock segment', () => {
     await screen.findByText('No purchases recorded yet.');
     expect(listPurchaseLines).toHaveBeenCalledTimes(2);
   });
+
+  it('hides inactive (used-up or deleted-receipt) rows from the stock list', () => {
+    renderView({ pantry: [...pantry, item({ id: 'p-gone', item: 'Gone', amount: 0, isActive: false })] });
+    expect(screen.queryByText('Gone')).not.toBeInTheDocument();
+    expect(rowNames()).toHaveLength(3);
+  });
 });

@@ -160,4 +160,30 @@ describe('inventory purchase lines and receipt totals', () => {
     expect(receipts).toHaveLength(1);
     expect(receipts[0].totalMinor).toBe(1200);
   });
+
+  it('deleting a receipt removes stock rows that only that receipt supplied', async () => {
+    const { store, inventory } = setup();
+    const saved = await store.saveCapture(capture({ lines: [line('Eggs', 1200, '12'), line('Milk', 900, '1')] }));
+    await store.createStock({ userId: 'u', item: 'Rice', amount: 5, unit: 'kg', price: 55, expirationDate: null, category: 'Grains', notes: null, isActive: true });
+    await inventory.deleteReceipt(saved.eventId, 0);
+    const stock = await store.listStock();
+    expect(stock.map((row) => row.item)).toEqual(['Rice']);
+  });
+
+  it('deleting a receipt that only partly supplied a row keeps the row with the remaining amount', async () => {
+    const { store, inventory } = setup();
+    const first = await store.saveCapture(capture({ occurredOn: '2026-10-01', lines: [line('Eggs', 1200, '12')] }));
+    await store.saveCapture(capture({ occurredOn: '2026-10-02', lines: [line('Eggs', 600, '6')] }));
+    await inventory.deleteReceipt(first.eventId, 0);
+    const [eggs] = await store.listStock();
+    expect(eggs).toMatchObject({ item: 'Eggs', amount: 6, isActive: true });
+  });
+
+  it('deleting the last line of a receipt removes the row it supplied', async () => {
+    const { store, inventory } = setup();
+    const saved = await store.saveCapture(capture({ lines: [line('Eggs', 1200, '12')] }));
+    const detail = await inventory.getReceipt(saved.eventId);
+    await inventory.deleteReceiptLine(saved.eventId, detail!.lines[0].id, 0);
+    expect(await store.listStock()).toEqual([]);
+  });
 });
