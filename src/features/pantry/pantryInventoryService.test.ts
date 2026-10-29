@@ -1,13 +1,17 @@
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
+import { createIndexedDbPriceStore } from '../prices/indexedDbPriceStore';
+import { openKitchenDatabase, transactionDone } from '../../lib/storage/database';
 import {
   allocateConsumption,
   calculateWeightedAverage,
   canDeleteReceipt,
+  createIndexedDbInventoryService,
   findMergeTarget,
   mergeStockRows,
   type StockContribution,
 } from './pantryInventoryService';
-import type { PriceStock } from '../prices/types';
+import type { PriceCapture, PriceStock } from '../prices/types';
 
 describe('pantry inventory service', () => {
   it('merges compatible manual stock rows using weighted average pricing', () => {
@@ -105,5 +109,46 @@ describe('mergeStockRows with unit conversion', () => {
     expect(merged.unit).toBe('g');
     expect(merged.amount).toBe('1500');
     expect(merged.priceMajor).toBeCloseTo((500 * 0.1 + 1000 * 0.08) / 1500, 6);
+  });
+});
+
+describe('inventory purchase lines and receipt totals', () => {
+  function setup() {
+    const factory = new IDBFactory();
+    return { store: createIndexedDbPriceStore({ factory }), inventory: createIndexedDbInventoryService({ factory }), factory };
+  }
+  const line = (itemName: string, paidMinor: number, quantity = '1') => ({ lineId: `line-${itemName}`, ordinal: 0, itemName, quantity, unit: 'each', paidMinor, packageQuantity: null, packageUnit: null });
+  const capture = (overrides: Partial<PriceCapture>): PriceCapture => ({ operationId: `op-${Math.random()}`, kind: 'purchase', source: 'manual', occurredOn: '2026-10-01', dateEstimated: false, capturedAt: '2026-10-01T00:00:00.000Z', currency: 'PHP', merchantName: 'SM', receiptNumber: null, lines: [line('Eggs', 1200)], ...overrides });
+
+  it('listPurchaseLines joins item and merchant names, newest first', async () => {
+    const { store, inventory } = setup();
+    await store.saveCapture(capture({ occurredOn: '2026-10-01', lines: [line('Eggs', 1200)] }));
+    await store.saveCapture(capture({ occurredOn: '2026-10-05', merchantName: 'Robinsons', lines: [line('Milk', 900)] }));
+    const lines = await inventory.listPurchaseLines();
+    expect(lines.map((entry) => entry.itemName)).toEqual(['Milk', 'Eggs']);
+    expect(lines[0]).toMatchObject({ merchantName: 'Robinsons', paidMinor: 900, currency: 'PHP', occurredOn: '2026-10-05' });
+  });
+
+  it('listPurchaseLines excludes quote events', async () => {
+    const { store, inventory } = setup();
+    await store.saveCapture(capture({ kind: 'quote', lines: [line('Butter', 500)] }));
+    expect(await inventory.listPurchaseLines()).toEqual([]);
+  });
+
+  it('listPurchaseLines labels a missing catalog item "Unknown item"', async () => {
+    const { store, inventory, factory } = setup();
+    await store.saveCapture(capture({ lines: [line('Eggs', 1200)] }));
+    const db = await openKitchenDatabase(factory);
+    const transaction = db.transaction('price_items', 'readwrite');
+    transaction.objectStore('price_items').clear();
+    await transactionDone(transaction);
+    const lines = await inventory.listPurchaseLines();
+    expect(lines[0]?.itemName).toBe('Unknown item');
+  });
+
+  it('listReceipts totalMinor sums line paidMinor', async () => {
+    const { store, inventory } = setup();
+    await store.saveCapture(capture({ lines: [line('Eggs', 1200), line('Milk', 900)] }));
+    expect((await inventory.listReceipts())[0]?.totalMinor).toBe(2100);
   });
 });

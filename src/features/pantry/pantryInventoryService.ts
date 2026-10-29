@@ -162,7 +162,20 @@ export interface ReceiptSummary {
   dateEstimated: boolean;
   currency: string;
   lineCount: number;
+  totalMinor: number;
   revision: number;
+}
+
+export interface PurchaseLine {
+  observationId: string;
+  eventId: string;
+  itemName: string;
+  quantity: string;
+  unit: string;
+  paidMinor: number;
+  currency: string;
+  occurredOn: string;
+  merchantName: string | null;
 }
 
 export interface ReceiptDetail extends ReceiptSummary {
@@ -174,6 +187,7 @@ export interface InventoryService {
   consumeRecipe(input: ConsumeRecipeInput): Promise<ConsumeIngredientsResult>;
   listCurrentStock(): Promise<PantryItem[]>;
   listReceipts(): Promise<ReceiptSummary[]>;
+  listPurchaseLines(): Promise<PurchaseLine[]>;
   getReceipt(id: string): Promise<ReceiptDetail | null>;
   deleteReceipt(id: string, expectedRevision: number): Promise<void>;
   deleteReceiptLine(eventId: string, observationId: string, expectedRevision: number): Promise<void>;
@@ -224,7 +238,26 @@ export function createIndexedDbInventoryService(options: IndexedDbInventoryServi
         readAll<{ id: string; name: string }>(transaction.objectStore('price_merchants')),
       ]);
       const merchantNames = new Map(merchants.map((merchant) => [merchant.id, merchant.name]));
-      return events.map((event) => ({ id: event.id, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null, occurredOn: event.occurredOn, dateEstimated: event.dateEstimated, currency: event.currency, lineCount: observations.filter((observation) => observation.eventId === event.id).length, revision: event.revision })).sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
+      return events.map((event) => { const lines = observations.filter((observation) => observation.eventId === event.id); return { id: event.id, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null, occurredOn: event.occurredOn, dateEstimated: event.dateEstimated, currency: event.currency, lineCount: lines.length, totalMinor: lines.reduce((sum, observation) => sum + observation.paidMinor, 0), revision: event.revision }; }).sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
+    },
+
+    async listPurchaseLines() {
+      const db = await open();
+      const transaction = db.transaction(['price_events', 'price_observations', 'price_items', 'price_merchants'], 'readonly');
+      const [events, observations, items, merchants] = await Promise.all([
+        readAll<PriceEvent>(transaction.objectStore('price_events')),
+        readAll<PriceObservation>(transaction.objectStore('price_observations')),
+        readAll<{ id: string; name: string }>(transaction.objectStore('price_items')),
+        readAll<{ id: string; name: string }>(transaction.objectStore('price_merchants')),
+      ]);
+      const purchases = new Map(events.filter((event) => event.kind === 'purchase').map((event) => [event.id, event]));
+      const itemNames = new Map(items.map((item) => [item.id, item.name]));
+      const merchantNames = new Map(merchants.map((merchant) => [merchant.id, merchant.name]));
+      return observations.flatMap((observation) => {
+        const event = purchases.get(observation.eventId);
+        if (!event) return [];
+        return [{ observationId: observation.id, eventId: event.id, itemName: itemNames.get(observation.itemId) ?? 'Unknown item', quantity: observation.quantity, unit: observation.unit, paidMinor: observation.paidMinor, currency: event.currency, occurredOn: event.occurredOn, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null }];
+      }).sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
     },
 
     async getReceipt(eventId) {
@@ -240,7 +273,7 @@ export function createIndexedDbInventoryService(options: IndexedDbInventoryServi
       const itemNames = new Map(items.map((item) => [item.id, item.name]));
       const merchantNames = new Map(merchants.map((merchant) => [merchant.id, merchant.name]));
       await transactionDone(transaction);
-      return { id: event.id, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null, occurredOn: event.occurredOn, dateEstimated: event.dateEstimated, currency: event.currency, lineCount: observations.filter((observation) => observation.eventId === event.id).length, revision: event.revision, lines: observations.filter((observation) => observation.eventId === event.id).map((observation) => ({ ...observation, itemName: itemNames.get(observation.itemId) ?? 'Unknown item' })) };
+      return { id: event.id, merchantName: event.merchantId ? merchantNames.get(event.merchantId) ?? null : null, occurredOn: event.occurredOn, dateEstimated: event.dateEstimated, currency: event.currency, lineCount: observations.filter((observation) => observation.eventId === event.id).length, totalMinor: observations.filter((observation) => observation.eventId === event.id).reduce((sum, observation) => sum + observation.paidMinor, 0), revision: event.revision, lines: observations.filter((observation) => observation.eventId === event.id).map((observation) => ({ ...observation, itemName: itemNames.get(observation.itemId) ?? 'Unknown item' })) };
     },
 
     async deleteReceipt(eventId, expectedRevision) {
