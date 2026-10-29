@@ -17,6 +17,7 @@ export function createRecipeImportHandler(fetcher = fetch) {
     try {
       // Recipe sites behind bot protection answer bare requests with 403; look like an ordinary browser.
       const response = await fetcher(parsed.href, { signal: controller.signal, redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'accept-language': 'en-US,en;q=0.9' } });
+      if (response.status === 402 || response.status === 403 || response.status === 429) return res.status(502).json({ error: 'fetch-blocked', message: `This website does not allow apps to read its pages (HTTP ${response.status}). Copy the recipe from the page and use Add → Paste text instead.` });
       if (!response.ok) return res.status(502).json({ error: 'fetch-failed', message: `The recipe website refused the request (HTTP ${response.status}).` });
       const content = await readLimitedText(response);
       const draft = parseRecipePage(content, parsed.href);

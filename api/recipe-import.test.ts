@@ -65,4 +65,12 @@ describe('recipe import endpoint', () => {
     expect(res.statusCode).toBe(502);
     expect(res.body.message).toMatch(/403/);
   });
+
+  it('explains a 402/403 as the site blocking automated reads and points to paste', async () => {
+    const handler = createRecipeImportHandler(async () => new Response('pay', { status: 402 }));
+    const res = response();
+    await handler({ method: 'POST', body: { url: 'https://www.allrecipes.com/recipe/1/' } }, res);
+    expect(res.body.message).toMatch(/does not allow apps to read its pages \(HTTP 402\)/);
+    expect(res.body.message).toMatch(/Paste text/);
+  });
 });
