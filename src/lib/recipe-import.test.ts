@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { RecipeImportError, parseRecipeContent, parseRecipeText } from './recipe-import';
+import { describe, expect, it, vi } from 'vitest';
+import { RecipeImportError, importRecipeFromUrl, parseRecipeContent, parseRecipeText } from './recipe-import';
 
 describe('recipe import parsing', () => {
   it('prefers Schema.org Recipe JSON-LD and normalizes a draft', () => {
@@ -97,5 +97,18 @@ describe('parseRecipeText', () => {
     const draft = parseRecipeText('Adobo\n1 kg chicken\n1. Combine everything.\n2) Simmer 30 minutes.\nStep 3 Serve.');
     expect(draft.ingredients).toHaveLength(1);
     expect(draft.instructions).toBe('1. Combine everything.\n2) Simmer 30 minutes.\nStep 3 Serve.');
+  });
+});
+
+describe('importRecipeFromUrl', () => {
+  it('re-parses the raw ingredient lines returned by the API with the full client parser', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      name: 'Pasta Salad', category: 'Miscellaneous', servings: 8, prepTime: 20, imageUrl: '', submittedBy: 'Personal', approved: false, sourceUrl: 'https://example.com/pasta', instructions: 'Mix.',
+      ingredients: [{ amount: 1, unit: '', item: '½\u00a0cup mayonnaise' }, { amount: 1, unit: '', item: '(12 oz.) package elbow macaroni' }],
+      ingredientLines: ['½\u00a0cup mayonnaise', '1 (12 oz.) package elbow macaroni', 'or 3 tbsp ranch from a jar'],
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    const draft = await importRecipeFromUrl('https://example.com/pasta');
+    expect(draft.ingredients).toEqual([{ amount: 0.5, unit: 'cup', item: 'mayonnaise' }, { amount: 12, unit: 'oz', item: 'elbow macaroni' }]);
+    vi.unstubAllGlobals();
   });
 });

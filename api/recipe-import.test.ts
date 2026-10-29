@@ -38,4 +38,14 @@ describe('recipe import endpoint', () => {
     expect(failed.statusCode).toBe(502);
     expect(failed.body).toMatchObject({ error: 'fetch-failed' });
   });
+
+  it('returns the raw ingredient lines so the client can parse fractions and package sizes', async () => {
+    const handler = createRecipeImportHandler(async () => new Response(
+      '<script type="application/ld+json">{"@type":"Recipe","name":"Pasta Salad","recipeIngredient":["½\u00a0cup mayonnaise","1 (12 oz.) package elbow macaroni"],"recipeInstructions":"Mix."}</script>',
+      { status: 200, headers: { 'content-type': 'text/html' } },
+    ));
+    const res = response();
+    await handler({ method: 'POST', body: { url: 'https://example.com/pasta' } }, res);
+    expect(res.body.ingredientLines).toEqual(['½\u00a0cup mayonnaise', '1 (12 oz.) package elbow macaroni']);
+  });
 });

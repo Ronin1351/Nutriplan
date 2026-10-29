@@ -156,7 +156,9 @@ export async function importRecipeFromUrl(url: string): Promise<RecipeImportDraf
   const response = await fetch(`${apiOrigin}/api/recipe-import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: parsed.href }) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new RecipeImportError(body.error ?? 'malformed-content', body.message ?? 'The recipe could not be imported.');
-  return body as RecipeImportDraft;
+  const { ingredientLines, ...draft } = body as RecipeImportDraft & { ingredientLines?: string[] };
+  // The API's ingredient split is deliberately naive; the client parser knows fractions, package sizes and count nouns.
+  return Array.isArray(ingredientLines) && ingredientLines.length ? { ...draft, ingredients: normalizeIngredients(ingredientLines) } : draft;
 }
 
 const INGREDIENT_LINE = /^\s*(\d+([.,/]\d+)?|[½¼¾⅓⅔])/;
