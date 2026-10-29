@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createRecipeImportHandler } from './recipe-import.js';
 
 function response() {
@@ -47,5 +47,22 @@ describe('recipe import endpoint', () => {
     const res = response();
     await handler({ method: 'POST', body: { url: 'https://example.com/pasta' } }, res);
     expect(res.body.ingredientLines).toEqual(['½\u00a0cup mayonnaise', '1 (12 oz.) package elbow macaroni']);
+  });
+
+  it('identifies itself as a browser so recipe sites do not refuse the request', async () => {
+    const fetcher = vi.fn(async () => new Response('<script type="application/ld+json">{"@type":"Recipe","name":"Chili","recipeIngredient":["1 lb beef"],"recipeInstructions":"Cook."}</script>', { status: 200, headers: { 'content-type': 'text/html' } }));
+    const handler = createRecipeImportHandler(fetcher as unknown as typeof fetch);
+    await handler({ method: 'POST', body: { url: 'https://www.allrecipes.com/recipe/1/' } }, response());
+    const headers = (fetcher.mock.calls[0] as unknown as [string, { headers: Record<string, string> }])[1].headers;
+    expect(headers['user-agent']).toMatch(/Mozilla\/5\.0/);
+    expect(headers['accept-language']).toBeTruthy();
+  });
+
+  it('reports the HTTP status when a site refuses the request', async () => {
+    const handler = createRecipeImportHandler(async () => new Response('blocked', { status: 403 }));
+    const res = response();
+    await handler({ method: 'POST', body: { url: 'https://www.allrecipes.com/recipe/1/' } }, res);
+    expect(res.statusCode).toBe(502);
+    expect(res.body.message).toMatch(/403/);
   });
 });
