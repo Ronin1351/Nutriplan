@@ -60,7 +60,8 @@ export function parseIngredientLine(line: string): Ingredient {
   if (amountMatch) { amount = parseAmount(amountMatch[1]); remaining = normalized.slice(amountMatch[0].length).trim(); }
 
   // Size adjectives before a count noun ("2 small cans") carry no measure.
-  remaining = remaining.replace(/^(?:small|medium|large|extra[- ]large)\s+(?=\w)/i, '');
+  const adjective = remaining.match(/^(?:small|medium|large|extra[- ]large)\s+(\w+)/i);
+  if (adjective && UNIT_ALIASES[adjective[1].toLowerCase()]) remaining = remaining.slice(adjective[0].length - adjective[1].length);
   // "1 (12 oz.) package elbow macaroni" or "1 box (12 oz.) elbow macaroni": the parenthetical size is the real measure, times the count.
   const leadingPackage = remaining.match(PACKAGE_WORDS)?.[0] ?? '';
   const afterPackage = remaining.slice(leadingPackage.length);
