@@ -1,9 +1,10 @@
 export const KITCHEN_DATABASE_NAME = 'nutriplan-cache';
-export const KITCHEN_DATABASE_VERSION = 2;
+export const KITCHEN_DATABASE_VERSION = 3;
 
 export const KITCHEN_STORES = [
   'cache', 'price_items', 'price_aliases', 'price_merchants', 'price_events',
   'price_observations', 'price_stock', 'price_fingerprints', 'price_meta',
+  'price_stock_contributions', 'price_consumptions', 'price_pending_operations',
 ] as const;
 
 export type KitchenStoreName = typeof KITCHEN_STORES[number];

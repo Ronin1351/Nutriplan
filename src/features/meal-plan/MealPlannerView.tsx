@@ -2,9 +2,9 @@ import type { MealPlan, Recipe, Weekday } from '../../types/domain';
 
 const DAYS: Weekday[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-interface MealPlannerViewProps { recipes: Recipe[]; mealPlan: MealPlan; onChange: (plan: MealPlan) => Promise<void>; }
+interface MealPlannerViewProps { recipes: Recipe[]; mealPlan: MealPlan; onChange: (plan: MealPlan) => Promise<void>; onCook?: (recipe: Recipe) => Promise<void>; }
 
-export default function MealPlannerView({ recipes, mealPlan, onChange }: MealPlannerViewProps) {
+export default function MealPlannerView({ recipes, mealPlan, onChange, onCook }: MealPlannerViewProps) {
   async function add(day: Weekday, recipeId: string) {
     if (recipeId) await onChange({ ...mealPlan, [day]: [...mealPlan[day], recipeId] });
   }
@@ -19,7 +19,7 @@ export default function MealPlannerView({ recipes, mealPlan, onChange }: MealPla
       <select id={`add-${day}`} aria-label={`Add meal to ${day}`} value="" onChange={(event) => void add(day, event.target.value)}>
         <option value="">Add meal…</option>{recipes.map((recipe) => <option key={String(recipe.id)} value={String(recipe.id)}>{recipe.name}</option>)}
       </select>
-      {mealPlan[day].length === 0 ? <p className="empty-inline">No meals planned.</p> : <ul className="meal-list">{mealPlan[day].map((recipeId, index) => { const recipe = recipes.find((item) => String(item.id) === String(recipeId)); if (!recipe) return null; return <li key={`${String(recipeId)}-${index}`}><span>{recipe.name}</span><button className="text-button danger" aria-label={`Remove ${recipe.name} from ${day}`} onClick={() => void remove(day, index)}>Remove</button></li>; })}</ul>}
+      {mealPlan[day].length === 0 ? <p className="empty-inline">No meals planned.</p> : <ul className="meal-list">{mealPlan[day].map((recipeId, index) => { const recipe = recipes.find((item) => String(item.id) === String(recipeId)); if (!recipe) return null; return <li key={`${String(recipeId)}-${index}`}><span>{recipe.name}</span><span className="meal-actions">{onCook && <button className="text-button" onClick={() => void onCook(recipe)}>Cook</button>}<button className="text-button danger" aria-label={`Remove ${recipe.name} from ${day}`} onClick={() => void remove(day, index)}>Remove</button></span></li>; })}</ul>}
     </article>)}</div>
   </section>;
 }

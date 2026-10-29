@@ -87,6 +87,8 @@ export interface ShoppingListItem {
   toBuy: number;
   unit: string;
   sufficient: boolean;
+  match: 'exact' | 'converted' | 'unresolved';
+  explanation?: string;
 }
 
 export interface Rating {

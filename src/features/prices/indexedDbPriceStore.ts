@@ -4,6 +4,8 @@ import { matchItem } from './itemMatching';
 import { minorToMajor, pantryToStock, stockToPantry } from './pantryPriceAdapter';
 import type { CatalogItem, EventCorrection, ItemAlias, Merchant, ObservationCorrection, PriceCapture, PriceEvent, PriceExport, PriceHistoryPoint, PriceHistoryQuery, PriceObservation, PriceStore, PriceStock, PriceSummary, SaveCaptureResult } from './types';
 import { openKitchenDatabase, requestResult, transactionDone } from '../../lib/storage/database';
+import { normalizeUnit } from '../../lib/units';
+import { mergeStockRows } from '../pantry/pantryInventoryService';
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -11,6 +13,16 @@ function id(prefix: string): string {
 
 async function all<T>(store: IDBObjectStore): Promise<T[]> {
   return (await requestResult(store.getAll())) as T[];
+}
+
+function stockMatches(stock: PriceStock, itemId: string, unit: string, currency: string): boolean {
+  return stock.itemId === itemId && normalizeUnit(stock.unit) === normalizeUnit(unit) && (stock.currency ?? currency) === currency && stock.expirationDate === null;
+}
+
+function nextWeightedPrice(stock: PriceStock, addedAmount: string, addedPriceMajor: number): number {
+  const existingAmount = Number(stock.amount) || 0;
+  const amount = Number(addedAmount) || 0;
+  return existingAmount + amount > 0 ? ((existingAmount * stock.priceMajor) + (amount * addedPriceMajor)) / (existingAmount + amount) : addedPriceMajor;
 }
 
 export interface IndexedDbPriceStoreOptions { factory?: IDBFactory; }
@@ -25,16 +37,17 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
     async saveCapture(input: PriceCapture): Promise<SaveCaptureResult> {
       const db = await open();
       const fingerprint = await captureFingerprint(input);
-      const transaction = db.transaction(['price_items', 'price_aliases', 'price_merchants', 'price_events', 'price_observations', 'price_stock', 'price_fingerprints'], 'readwrite');
+      const transaction = db.transaction(['price_items', 'price_aliases', 'price_merchants', 'price_events', 'price_observations', 'price_stock', 'price_stock_contributions', 'price_fingerprints'], 'readwrite');
       const itemsStore = transaction.objectStore('price_items');
       const aliasesStore = transaction.objectStore('price_aliases');
       const merchantsStore = transaction.objectStore('price_merchants');
       const eventsStore = transaction.objectStore('price_events');
       const observationsStore = transaction.objectStore('price_observations');
       const stockStore = transaction.objectStore('price_stock');
+      const contributionStore = transaction.objectStore('price_stock_contributions');
       const fingerprintsStore = transaction.objectStore('price_fingerprints');
-      const [items, aliases, merchants, events] = await Promise.all([all<CatalogItem>(itemsStore), all<ItemAlias>(aliasesStore), all<Merchant>(merchantsStore), all<PriceEvent>(eventsStore)]);
-      const duplicate = events.find((event) => event.fingerprint === fingerprint);
+      const [items, aliases, merchants, events, stocks] = await Promise.all([all<CatalogItem>(itemsStore), all<ItemAlias>(aliasesStore), all<Merchant>(merchantsStore), all<PriceEvent>(eventsStore), all<PriceStock>(stockStore)]);
+      const duplicate = events.find((event) => event.fingerprint === fingerprint || event.operationId === input.operationId);
       if (duplicate) { await transactionDone(transaction); return { status: 'duplicate', eventId: duplicate.id, matchedCatalogIds: [], affectedStockIds: [] }; }
       let merchantId: string | null = null;
       if (input.merchantName?.trim()) {
@@ -55,8 +68,18 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
         const observation: PriceObservation = { id: id('observation'), eventId: event.id, itemId: item.id, lineId: line.lineId, ordinal: line.ordinal, quantity: line.quantity, unit: line.unit, paidMinor: line.paidMinor, packageQuantity: line.packageQuantity ?? null, packageUnit: line.packageUnit ?? null, revision: 0 };
         observationsStore.put(observation, observation.id);
         if (input.kind === 'purchase') {
-          const stockId = id('stock');
-          stockStore.put({ id: stockId, itemId: item.id, itemName: item.name, brand: item.brand, packageQuantity: item.packageQuantity, packageUnit: item.packageUnit, amount: line.quantity, unit: line.unit, priceMajor: minorToMajor(line.paidMinor, input.currency), expirationDate: null, category: item.category, notes: input.merchantName?.trim() || null, isActive: true } satisfies PriceStock, stockId);
+          const addedPriceMajor = minorToMajor(line.paidMinor, input.currency);
+          const existing = stocks.find((stock) => stockMatches(stock, item.id, line.unit, input.currency));
+          const stockId = existing?.id ?? id('stock');
+          const stock: PriceStock = existing
+            ? { ...existing, amount: String((Number(existing.amount) || 0) + (Number(line.quantity) || 0)), priceMajor: nextWeightedPrice(existing, line.quantity, addedPriceMajor), isActive: true }
+            : { id: stockId, itemId: item.id, itemName: item.name, brand: item.brand, packageQuantity: item.packageQuantity, packageUnit: item.packageUnit, amount: line.quantity, unit: line.unit, priceMajor: addedPriceMajor, expirationDate: null, category: item.category, notes: input.merchantName?.trim() || null, isActive: true, currency: input.currency };
+          stockStore.put(stock, stockId);
+          const stockIndex = stocks.findIndex((candidate) => candidate.id === stockId);
+          if (stockIndex >= 0) stocks[stockIndex] = stock;
+          else stocks.push(stock);
+          const contributionId = id('contribution');
+          contributionStore.put({ id: contributionId, stockId, eventId: event.id, observationId: observation.id, quantity: line.quantity, consumedQuantity: '0', paidMinor: line.paidMinor, currency: input.currency, occurredOn: input.occurredOn, capturedAt: input.capturedAt }, contributionId);
           affectedStockIds.push(stockId);
         }
       }
@@ -84,7 +107,27 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
     },
     async exportRecords(): Promise<PriceExport> { const [items, aliases, merchants, events, observations, stock] = await Promise.all([read<CatalogItem>('price_items'), read<ItemAlias>('price_aliases'), read<Merchant>('price_merchants'), read<PriceEvent>('price_events'), read<PriceObservation>('price_observations'), read<PriceStock>('price_stock')]); return { schemaVersion: 2, items, aliases, merchants, events, observations, stock }; },
     async listStock() { return (await read<PriceStock>('price_stock')).map(stockToPantry); },
-    async createStock(input: NewPantryItem) { const stock = pantryToStock(input, id('stock')); await put('price_stock', stock, stock.id); return stockToPantry(stock); },
+    async createStock(input: NewPantryItem) {
+      const db = await open();
+      const transaction = db.transaction(['price_stock', 'price_events', 'price_observations', 'price_stock_contributions'], 'readwrite');
+      const stockStore = transaction.objectStore('price_stock');
+      const eventStore = transaction.objectStore('price_events');
+      const observationStore = transaction.objectStore('price_observations');
+      const contributionStore = transaction.objectStore('price_stock_contributions');
+      const stocks = await all<PriceStock>(stockStore);
+      const incoming = pantryToStock(input, id('stock'));
+      const existing = stocks.find((stock) => stock.itemName.trim().toLocaleLowerCase() === incoming.itemName.trim().toLocaleLowerCase() && normalizeUnit(stock.unit) === normalizeUnit(incoming.unit) && stock.expirationDate === incoming.expirationDate && (stock.currency ?? 'PHP') === 'PHP');
+      const stock = existing ? mergeStockRows(existing, incoming) : incoming;
+      stockStore.put(stock, stock.id);
+      const event: PriceEvent = { id: id('event'), operationId: id('manual'), kind: 'purchase', source: 'manual', occurredOn: new Date().toISOString().slice(0, 10), dateEstimated: true, capturedAt: new Date().toISOString(), currency: 'PHP', merchantId: null, receiptNumber: null, fingerprint: '', revision: 0 };
+      eventStore.put(event, event.id);
+      const observation: PriceObservation = { id: id('observation'), eventId: event.id, itemId: stock.itemId, lineId: id('manual-line'), ordinal: 0, quantity: String(input.amount), unit: input.unit, paidMinor: Math.round(input.price * 100), packageQuantity: null, packageUnit: null, revision: 0 };
+      observationStore.put(observation, observation.id);
+      const contributionId = id('contribution');
+      contributionStore.put({ id: contributionId, stockId: stock.id, eventId: event.id, observationId: observation.id, quantity: String(input.amount), consumedQuantity: '0', paidMinor: Math.round(input.price * 100), currency: 'PHP', occurredOn: event.occurredOn, capturedAt: event.capturedAt }, contributionId);
+      await transactionDone(transaction);
+      return stockToPantry(stock);
+    },
     async updateStock(item: PantryItem) { const stock = pantryToStock(item, String(item.id)); await put('price_stock', stock, stock.id); return stockToPantry(stock); },
     async removeStock(stockId: string | number) { const db = await open(); const transaction = db.transaction('price_stock', 'readwrite'); transaction.objectStore('price_stock').delete(String(stockId)); await transactionDone(transaction); },
     async saveStockNotes(stockId: string | number, notes: string | null) { const db = await open(); const transaction = db.transaction('price_stock', 'readwrite'); const store = transaction.objectStore('price_stock'); const stock = await requestResult(store.get(String(stockId))) as PriceStock | undefined; if (stock) store.put({ ...stock, notes }, String(stockId)); await transactionDone(transaction); },

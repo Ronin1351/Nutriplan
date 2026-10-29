@@ -156,6 +156,24 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
     setMealPlan(plan); await writeCache({ recipes, pantry, mealPlan: plan });
   }
 
+  async function cookRecipe(recipe: Recipe) {
+    if (!source.inventory) {
+      setError('Cooking is unavailable until local inventory storage is enabled.');
+      return;
+    }
+    try {
+      const operationId = `cook-${crypto.randomUUID()}`;
+      const result = await source.inventory.consumeRecipe({ operationId, recipe });
+      const refreshed = await source.listPantry();
+      setPantry(refreshed);
+      await writeCache({ recipes, pantry: refreshed, mealPlan });
+      const missing = result.results.filter((item) => item.missing > 0);
+      if (missing.length > 0) setError(`Cooked ${recipe.name}. Still missing: ${missing.map((item) => `${item.missing} ${item.unit} ${item.item}`).join(', ')}.`);
+    } catch (cookError) {
+      setError(cookError instanceof Error ? cookError.message : 'Unable to consume pantry stock.');
+    }
+  }
+
   async function refreshPantryFromPriceStore() {
     if (!source.prices) return;
     const refreshed = await source.listPantry();
@@ -199,7 +217,7 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
       </header>
       <OrbitalNav activeSection={activeSection} onChange={setActiveSection} />
       <main className="app-main">
-        {loading ? <div className="state-panel"><span className="loading-dot" aria-hidden="true" /><h1>Loading your kitchen…</h1><p>Getting your recipes and pantry ready.</p></div> : error ? <div className="state-panel error-state" role="alert"><span aria-hidden="true">!</span><h1>Couldn’t load your kitchen</h1><p>{error}</p><button className="button primary" onClick={() => void loadData()}>Retry</button></div> : activeSection === 'recipes' ? <RecipesView recipes={recipes} pantry={pantry} currency={currency} onCreate={createRecipe} onUpdate={updateRecipe} onRemove={removeRecipe} onImport={createRecipe} onImportRecipes={importRecipes} /> : activeSection === 'pantry' ? <PantryView pantry={pantry} currency={currency} onCreate={createPantryItem} onUpdate={updatePantryItem} onRemove={removePantryItem} onSaveNotes={savePantryNotes} priceStore={source.prices} onPricesSaved={refreshPantryFromPriceStore} /> : activeSection === 'planner' ? <MealPlannerView recipes={recipes} mealPlan={mealPlan} onChange={saveMealPlan} /> : activeSection === 'shopping' ? <ShoppingListView recipes={recipes} pantry={pantry} mealPlan={mealPlan} /> : <ImportHub categoryRules={categoryRules} onSaveRecipe={createRecipe} onSaveReceipt={importReceipt} onCancel={() => setActiveSection('recipes')} />}
+        {loading ? <div className="state-panel"><span className="loading-dot" aria-hidden="true" /><h1>Loading your kitchen…</h1><p>Getting your recipes and pantry ready.</p></div> : error ? <div className="state-panel error-state" role="alert"><span aria-hidden="true">!</span><h1>Couldn’t load your kitchen</h1><p>{error}</p><button className="button primary" onClick={() => { setError(null); void loadData(); }}>Retry</button></div> : activeSection === 'recipes' ? <RecipesView recipes={recipes} pantry={pantry} currency={currency} onCreate={createRecipe} onUpdate={updateRecipe} onRemove={removeRecipe} onImport={createRecipe} onImportRecipes={importRecipes} /> : activeSection === 'pantry' ? <PantryView pantry={pantry} currency={currency} onCreate={createPantryItem} onUpdate={updatePantryItem} onRemove={removePantryItem} onSaveNotes={savePantryNotes} priceStore={source.prices} inventory={source.inventory} onPricesSaved={refreshPantryFromPriceStore} /> : activeSection === 'planner' ? <MealPlannerView recipes={recipes} mealPlan={mealPlan} onChange={saveMealPlan} onCook={cookRecipe} /> : activeSection === 'shopping' ? <ShoppingListView recipes={recipes} pantry={pantry} mealPlan={mealPlan} /> : <ImportHub categoryRules={categoryRules} onSaveRecipe={createRecipe} onSaveReceipt={importReceipt} onCancel={() => setActiveSection('recipes')} />}
       </main>
       <footer className="app-footer">Nutriplan · built for your everyday kitchen</footer>
     </div>

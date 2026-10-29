@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeDuplicateIngredients, parseIngredientLine } from './ingredients';
-import { convertUnits, convertUnitsDetailed, normalizeUnit } from './units';
+import { convertUnits, convertUnitsDetailed, convertUnitsStrictDetailed, normalizeUnit } from './units';
 import { deriveShoppingList } from './shopping-list';
 import { getExpirationStatus, mergePantryItems } from './pantry';
 import {
@@ -13,6 +13,10 @@ import {
 } from './recipes';
 import { formatCurrency } from './currency';
 import type { PantryItem, Recipe } from '../types/domain';
+
+it('does not treat counted units as compatible with mass units', () => {
+  expect(convertUnitsStrictDetailed(1, 'units', 'kg')).toMatchObject({ convertible: false });
+});
 
 const baseRecipe: Recipe = {
   id: 'recipe-1',
@@ -166,12 +170,22 @@ describe('pantry and shopping-list logic', () => {
     const shopping = deriveShoppingList(
       [{ ...baseRecipe, ingredients: [{ item: 'flour', amount: 6, unit: 'cup' }] }],
       { Monday: ['recipe-1'] },
-      [{ ...basePantry, amount: 4 }],
+      [{ ...basePantry, amount: 1 }, { ...basePantry, id: 'pantry-2', amount: 3 }],
     );
 
     expect(shopping).toEqual([
-      { item: 'flour', needed: 6, have: 4, toBuy: 2, unit: 'cup', sufficient: false },
+      { item: 'flour', needed: 6, have: 4, toBuy: 2, unit: 'cup', sufficient: false, match: 'exact' },
     ]);
+  });
+
+  it('marks incompatible pantry units unresolved instead of subtracting them', () => {
+    const shopping = deriveShoppingList(
+      [{ ...baseRecipe, ingredients: [{ item: 'flour', amount: 1, unit: 'kg' }] }],
+      { Monday: ['recipe-1'] },
+      [{ ...basePantry, amount: 4, unit: 'units' }],
+    );
+
+    expect(shopping[0]).toMatchObject({ have: 0, toBuy: 1, sufficient: false, match: 'unresolved' });
   });
 });
 

@@ -6,7 +6,7 @@ export function stockToPantry(stock: PriceStock): PantryItem {
 }
 
 export function pantryToStock(input: NewPantryItem | PantryItem, id = 'stock'): PriceStock {
-  return { id, itemId: id, itemName: input.item, brand: null, packageQuantity: null, packageUnit: null, amount: String(input.amount), unit: input.unit, priceMajor: input.price, expirationDate: input.expirationDate, category: input.category, notes: input.notes, isActive: input.isActive };
+  return { id, itemId: input.catalogItemId ?? id, itemName: input.item, brand: null, packageQuantity: null, packageUnit: null, amount: String(input.amount), unit: input.unit, priceMajor: input.price, expirationDate: input.expirationDate, category: input.category, notes: input.notes, isActive: input.isActive, currency: 'PHP' };
 }
 
 export function minorToMajor(minor: number, currency: string): number {

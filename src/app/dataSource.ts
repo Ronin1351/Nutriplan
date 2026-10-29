@@ -19,6 +19,7 @@ import { createAppCache, type AppCache, type CacheSnapshot } from '../lib/storag
 import { normalizeCategoryText, type CategoryRule } from '../features/categories/categoryClassifier';
 import { createIndexedDbPriceStore } from '../features/prices/indexedDbPriceStore';
 import type { PriceStore } from '../features/prices/types';
+import { createIndexedDbInventoryService, type InventoryService } from '../features/pantry/pantryInventoryService';
 
 export interface AppDataSource {
   listRecipes(): Promise<Recipe[]>;
@@ -35,6 +36,7 @@ export interface AppDataSource {
   listMealPlan(): Promise<MealPlan>;
   replaceMealPlan(plan: MealPlan): Promise<void>;
   prices?: PriceStore;
+  inventory?: InventoryService;
   isRemoteConfigured?: boolean;
 }
 
@@ -47,6 +49,7 @@ export function createSupabaseDataSource(options: {
   const userId = options.userId ?? import.meta.env.VITE_PERSONAL_USER_ID ?? 'personal-user';
   const cache = options.cache ?? createAppCache();
   const priceStore = typeof indexedDB !== 'undefined' ? createIndexedDbPriceStore() : undefined;
+  const inventory = typeof indexedDB !== 'undefined' ? createIndexedDbInventoryService() : undefined;
   let cacheSnapshot: CacheSnapshot = { recipes: [], pantry: [], mealPlan: emptyMealPlan(), settings: { theme: 'light', currency: 'PHP' }, categoryRules: [] };
   let cacheHydrated = false;
   const ensureCache = async () => { if (!cacheHydrated) { const existing = await cache.readSnapshot(); cacheSnapshot = { ...cacheSnapshot, ...(existing ?? {}), categoryRules: existing?.categoryRules ?? [] }; cacheHydrated = true; } };
@@ -55,6 +58,7 @@ export function createSupabaseDataSource(options: {
   return {
     isRemoteConfigured: true,
     prices: priceStore,
+    inventory,
     listRecipes: () => listRecipes(resolveClient()),
     createRecipe: async (input) => {
       const recipe = await createRecipeRecord(resolveClient(), input);
@@ -91,6 +95,7 @@ export function createLocalDataSource(cache: AppCache = createAppCache()): AppDa
   let snapshot: CacheSnapshot = { recipes: [], pantry: [], mealPlan: emptyMealPlan(), settings: { theme: 'light', currency: 'PHP' }, categoryRules: [] };
   let hydrated = false;
   const priceStore = typeof indexedDB !== 'undefined' ? createIndexedDbPriceStore() : undefined;
+  const inventory = typeof indexedDB !== 'undefined' ? createIndexedDbInventoryService() : undefined;
   let priceStockMigrated = false;
   const ensureHydrated = async () => { if (!hydrated) { const existing = await cache.readSnapshot(); snapshot = { ...snapshot, ...(existing ?? {}), categoryRules: existing?.categoryRules ?? [] }; hydrated = true; } };
   const ensurePriceStock = async () => {
@@ -104,6 +109,7 @@ export function createLocalDataSource(cache: AppCache = createAppCache()): AppDa
   return {
     isRemoteConfigured: false,
     prices: priceStore,
+    inventory,
     listRecipes: async () => { await ensureHydrated(); return snapshot.recipes; },
     createRecipe: async (input) => { await ensureHydrated(); const recipe: Recipe = { ...input, id: localId('recipe'), isFavorite: false, createdAt: new Date().toISOString(), approved: true, averageRating: 0, ratingCount: 0 }; snapshot = { ...snapshot, recipes: [recipe, ...snapshot.recipes] }; await persist(); return recipe; },
     updateRecipe: async (recipe) => { await ensureHydrated(); snapshot = { ...snapshot, recipes: snapshot.recipes.map((item) => item.id === recipe.id ? recipe : item) }; await persist(); return recipe; },

@@ -96,6 +96,7 @@ export interface PriceStock {
   category: string;
   notes: string | null;
   isActive: boolean;
+  currency?: string;
 }
 
 export interface PriceHistoryQuery {

@@ -117,3 +117,16 @@ export function convertUnitsDetailed(amount: number, fromUnit: string, toUnit: s
 
   return { amount, approximate: false, convertible: false };
 }
+
+/**
+ * Inventory conversion is intentionally stricter than recipe-cost conversion.
+ * Counted units never become compatible with a mass or volume unit merely
+ * because the legacy recipe helper accepts the `units` sentinel.
+ */
+export function convertUnitsStrictDetailed(amount: number, fromUnit: string, toUnit: string, ingredientName = ''): UnitConversionResult {
+  const from = normalizeUnit(fromUnit);
+  const to = normalizeUnit(toUnit);
+  if (from === to) return { amount, approximate: false, convertible: true };
+  if (from === 'units' || to === 'units') return { amount, approximate: false, convertible: false };
+  return convertUnitsDetailed(amount, from, to, ingredientName);
+}
