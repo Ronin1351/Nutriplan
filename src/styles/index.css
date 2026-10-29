@@ -48,7 +48,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .top-nav-item:hover { color: var(--text); border-color: var(--line); background: var(--surface-soft); transform: translateY(-1px); }
 .top-nav-item:focus-visible { color: var(--text); border-color: var(--cyan); }
 .top-nav-item.active { color: #07100b; border-color: var(--accent); background: var(--accent); box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 25%, transparent); }
-.top-nav-symbol { font-size: 1.05rem; line-height: 1; }
+.top-nav-symbol { flex: none; }
+.top-nav-item .top-nav-symbol { --np-icon-accent: var(--accent); }
 .content-section, .form-panel, .detail-panel, .quick-form { background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid var(--line); border-radius: 1.1rem; box-shadow: var(--shadow); }
 .content-section { padding: 1rem; }
 .section-toolbar { justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }

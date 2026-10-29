@@ -1,3 +1,5 @@
+import NutriPlanIcon from './NutriPlanIcon';
+
 export type OrbitalSection = 'plan' | 'shopping' | 'pantry' | 'recipes' | 'receipts';
 
 interface OrbitalNavProps {
@@ -5,12 +7,12 @@ interface OrbitalNavProps {
   onChange: (section: OrbitalSection) => void;
 }
 
-const destinations: Array<{ id: OrbitalSection; label: string; symbol: string }> = [
-  { id: 'plan', label: 'Plan', symbol: '▦' },
-  { id: 'shopping', label: 'Shopping', symbol: '◈' },
-  { id: 'pantry', label: 'Pantry', symbol: '◌' },
-  { id: 'recipes', label: 'Recipes', symbol: '✦' },
-  { id: 'receipts', label: 'Receipts', symbol: '▤' },
+const destinations: Array<{ id: OrbitalSection; label: string }> = [
+  { id: 'plan', label: 'Plan' },
+  { id: 'shopping', label: 'Shopping' },
+  { id: 'pantry', label: 'Pantry' },
+  { id: 'recipes', label: 'Recipes' },
+  { id: 'receipts', label: 'Receipts' },
 ];
 
 export default function OrbitalNav({ activeSection, onChange }: OrbitalNavProps) {
@@ -25,7 +27,7 @@ export default function OrbitalNav({ activeSection, onChange }: OrbitalNavProps)
             aria-current={activeSection === destination.id ? 'page' : undefined}
             onClick={() => onChange(destination.id)}
           >
-            <span className="top-nav-symbol" aria-hidden="true">{destination.symbol}</span>
+            <NutriPlanIcon name={destination.id} active={activeSection === destination.id} size={22} className="top-nav-symbol" data-icon={destination.id} />
             <span>{destination.label}</span>
           </button>
         ))}

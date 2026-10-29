@@ -43,4 +43,15 @@ describe('OrbitalNav', () => {
 
     expect(onChange).toHaveBeenCalledWith('pantry');
   });
+
+  it('renders the duotone icon for each destination, with the active one in single-color mode', () => {
+    render(<OrbitalNav activeSection="pantry" onChange={vi.fn()} />);
+    const icons = screen.getByRole('navigation').querySelectorAll('svg[data-icon]');
+    expect([...icons].map((icon) => icon.getAttribute('data-icon'))).toEqual(['plan', 'shopping', 'pantry', 'recipes', 'receipts']);
+    const pantryIcon = screen.getByRole('button', { name: 'Pantry' }).querySelector('svg');
+    const planIcon = screen.getByRole('button', { name: 'Plan' }).querySelector('svg');
+    expect(pantryIcon?.innerHTML).not.toContain('--np-icon-accent');
+    expect(planIcon?.innerHTML).toContain('--np-icon-accent');
+    expect(screen.getByRole('navigation').textContent).not.toMatch(/[▦◈◌✦▤]/);
+  });
 });
