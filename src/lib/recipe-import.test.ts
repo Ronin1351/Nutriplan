@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RecipeImportError, parseRecipeContent } from './recipe-import';
+import { RecipeImportError, parseRecipeContent, parseRecipeText } from './recipe-import';
 
 describe('recipe import parsing', () => {
   it('prefers Schema.org Recipe JSON-LD and normalizes a draft', () => {
@@ -69,5 +69,27 @@ describe('recipe import parsing', () => {
     expect(() => parseRecipeContent('<html><title>Not a recipe</title><p>Hello</p></html>')).toThrowError(
       new RecipeImportError('missing-recipe', 'No complete recipe was found in this content.'),
     );
+  });
+});
+
+describe('parseRecipeText', () => {
+  it('parses a title, quantity-led ingredient lines and remaining instructions', () => {
+    const draft = parseRecipeText('Pancakes\n2 cups flour\n1 egg\n1/2 tsp salt\nMix everything.\nFry until golden.');
+    expect(draft.name).toBe('Pancakes');
+    expect(draft.ingredients).toHaveLength(3);
+    expect(draft.ingredients[0]).toMatchObject({ item: 'flour', amount: 2, unit: 'cup' });
+    expect(draft.instructions).toBe('Mix everything.\nFry until golden.');
+    expect(draft).toMatchObject({ servings: 4, prepTime: 30, imageUrl: '', submittedBy: 'Personal', approved: false });
+  });
+
+  it('turns text with no quantity-led lines into instructions with empty ingredients', () => {
+    const draft = parseRecipeText('Grandma soup\nBoil bones.\nAdd salt to taste.');
+    expect(draft.ingredients).toEqual([]);
+    expect(draft.instructions).toBe('Boil bones.\nAdd salt to taste.');
+  });
+
+  it('throws missing-recipe for blank text', () => {
+    expect(() => parseRecipeText('  \n ')).toThrow(RecipeImportError);
+    expect(() => parseRecipeText('')).toThrow('No text was found in the photo.');
   });
 });
