@@ -4,8 +4,7 @@ import { matchItem } from './itemMatching';
 import { minorToMajor, pantryToStock, stockToPantry } from './pantryPriceAdapter';
 import type { CatalogItem, EventCorrection, ItemAlias, Merchant, ObservationCorrection, PriceCapture, PriceEvent, PriceExport, PriceHistoryPoint, PriceHistoryQuery, PriceObservation, PriceStore, PriceStock, PriceSummary, SaveCaptureResult } from './types';
 import { openKitchenDatabase, requestResult, transactionDone } from '../../lib/storage/database';
-import { normalizeUnit } from '../../lib/units';
-import { mergeStockRows } from '../pantry/pantryInventoryService';
+import { findMergeTarget, mergeStockRows, toStockUnit, type StockContribution } from '../pantry/pantryInventoryService';
 
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -13,16 +12,6 @@ function id(prefix: string): string {
 
 async function all<T>(store: IDBObjectStore): Promise<T[]> {
   return (await requestResult(store.getAll())) as T[];
-}
-
-function stockMatches(stock: PriceStock, itemId: string, unit: string, currency: string): boolean {
-  return stock.itemId === itemId && normalizeUnit(stock.unit) === normalizeUnit(unit) && (stock.currency ?? currency) === currency && stock.expirationDate === null;
-}
-
-function nextWeightedPrice(stock: PriceStock, addedAmount: string, addedPriceMajor: number): number {
-  const existingAmount = Number(stock.amount) || 0;
-  const amount = Number(addedAmount) || 0;
-  return existingAmount + amount > 0 ? ((existingAmount * stock.priceMajor) + (amount * addedPriceMajor)) / (existingAmount + amount) : addedPriceMajor;
 }
 
 export interface IndexedDbPriceStoreOptions { factory?: IDBFactory; }
@@ -69,17 +58,16 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
         observationsStore.put(observation, observation.id);
         if (input.kind === 'purchase') {
           const addedPriceMajor = minorToMajor(line.paidMinor, input.currency);
-          const existing = stocks.find((stock) => stockMatches(stock, item.id, line.unit, input.currency));
-          const stockId = existing?.id ?? id('stock');
-          const stock: PriceStock = existing
-            ? { ...existing, amount: String((Number(existing.amount) || 0) + (Number(line.quantity) || 0)), priceMajor: nextWeightedPrice(existing, line.quantity, addedPriceMajor), isActive: true }
-            : { id: stockId, itemId: item.id, itemName: item.name, brand: item.brand, packageQuantity: item.packageQuantity, packageUnit: item.packageUnit, amount: line.quantity, unit: line.unit, priceMajor: addedPriceMajor, expirationDate: null, category: item.category, notes: input.merchantName?.trim() || null, isActive: true, currency: input.currency };
+          const incoming: PriceStock = { id: id('stock'), itemId: item.id, itemName: item.name, brand: item.brand, packageQuantity: item.packageQuantity, packageUnit: item.packageUnit, amount: line.quantity, unit: line.unit, priceMajor: addedPriceMajor, expirationDate: null, category: item.category, notes: input.merchantName?.trim() || null, isActive: true, currency: input.currency };
+          const existing = findMergeTarget(stocks, incoming);
+          const stock = existing ? mergeStockRows(existing, incoming) : incoming;
+          const stockId = stock.id;
           stockStore.put(stock, stockId);
           const stockIndex = stocks.findIndex((candidate) => candidate.id === stockId);
           if (stockIndex >= 0) stocks[stockIndex] = stock;
           else stocks.push(stock);
           const contributionId = id('contribution');
-          contributionStore.put({ id: contributionId, stockId, eventId: event.id, observationId: observation.id, quantity: line.quantity, consumedQuantity: '0', paidMinor: line.paidMinor, currency: input.currency, occurredOn: input.occurredOn, capturedAt: input.capturedAt }, contributionId);
+          contributionStore.put({ id: contributionId, stockId, eventId: event.id, observationId: observation.id, quantity: toStockUnit(line.quantity, line.unit, stock), consumedQuantity: '0', paidMinor: line.paidMinor, currency: input.currency, occurredOn: input.occurredOn, capturedAt: input.capturedAt }, contributionId);
           affectedStockIds.push(stockId);
         }
       }
@@ -116,7 +104,7 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
       const contributionStore = transaction.objectStore('price_stock_contributions');
       const stocks = await all<PriceStock>(stockStore);
       const incoming = pantryToStock(input, id('stock'));
-      const existing = stocks.find((stock) => stock.itemName.trim().toLocaleLowerCase() === incoming.itemName.trim().toLocaleLowerCase() && normalizeUnit(stock.unit) === normalizeUnit(incoming.unit) && stock.expirationDate === incoming.expirationDate && (stock.currency ?? 'PHP') === 'PHP');
+      const existing = findMergeTarget(stocks, incoming);
       const stock = existing ? mergeStockRows(existing, incoming) : incoming;
       stockStore.put(stock, stock.id);
       const event: PriceEvent = { id: id('event'), operationId: id('manual'), kind: 'purchase', source: 'manual', occurredOn: new Date().toISOString().slice(0, 10), dateEstimated: true, capturedAt: new Date().toISOString(), currency: 'PHP', merchantId: null, receiptNumber: null, fingerprint: '', revision: 0 };
@@ -124,11 +112,30 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
       const observation: PriceObservation = { id: id('observation'), eventId: event.id, itemId: stock.itemId, lineId: id('manual-line'), ordinal: 0, quantity: String(input.amount), unit: input.unit, paidMinor: Math.round(input.price * 100), packageQuantity: null, packageUnit: null, revision: 0 };
       observationStore.put(observation, observation.id);
       const contributionId = id('contribution');
-      contributionStore.put({ id: contributionId, stockId: stock.id, eventId: event.id, observationId: observation.id, quantity: String(input.amount), consumedQuantity: '0', paidMinor: Math.round(input.price * 100), currency: 'PHP', occurredOn: event.occurredOn, capturedAt: event.capturedAt }, contributionId);
+      contributionStore.put({ id: contributionId, stockId: stock.id, eventId: event.id, observationId: observation.id, quantity: toStockUnit(input.amount, input.unit, stock), consumedQuantity: '0', paidMinor: Math.round(input.price * 100), currency: 'PHP', occurredOn: event.occurredOn, capturedAt: event.capturedAt }, contributionId);
       await transactionDone(transaction);
       return stockToPantry(stock);
     },
-    async updateStock(item: PantryItem) { const stock = pantryToStock(item, String(item.id)); await put('price_stock', stock, stock.id); return stockToPantry(stock); },
+    async updateStock(item: PantryItem) {
+      const db = await open();
+      const transaction = db.transaction(['price_stock', 'price_stock_contributions'], 'readwrite');
+      const stockStore = transaction.objectStore('price_stock');
+      const contributionStore = transaction.objectStore('price_stock_contributions');
+      const edited = pantryToStock(item, String(item.id));
+      const stocks = await all<PriceStock>(stockStore);
+      const target = findMergeTarget(stocks, edited);
+      if (!target) { stockStore.put(edited, edited.id); await transactionDone(transaction); return stockToPantry(edited); }
+      // The edit now describes an item that already exists: fold it into that row and retire the edited one.
+      const merged = mergeStockRows(target, edited);
+      const contributions = await all<StockContribution>(contributionStore);
+      for (const contribution of contributions.filter((candidate) => candidate.stockId === edited.id)) {
+        contributionStore.put({ ...contribution, stockId: merged.id, quantity: toStockUnit(contribution.quantity, edited.unit, merged), consumedQuantity: toStockUnit(contribution.consumedQuantity, edited.unit, merged) }, contribution.id);
+      }
+      stockStore.put(merged, merged.id);
+      stockStore.delete(edited.id);
+      await transactionDone(transaction);
+      return stockToPantry(merged);
+    },
     async removeStock(stockId: string | number) { const db = await open(); const transaction = db.transaction('price_stock', 'readwrite'); transaction.objectStore('price_stock').delete(String(stockId)); await transactionDone(transaction); },
     async saveStockNotes(stockId: string | number, notes: string | null) { const db = await open(); const transaction = db.transaction('price_stock', 'readwrite'); const store = transaction.objectStore('price_stock'); const stock = await requestResult(store.get(String(stockId))) as PriceStock | undefined; if (stock) store.put({ ...stock, notes }, String(stockId)); await transactionDone(transaction); },
   };

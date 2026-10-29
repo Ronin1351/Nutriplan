@@ -3,6 +3,7 @@ import {
   allocateConsumption,
   calculateWeightedAverage,
   canDeleteReceipt,
+  findMergeTarget,
   mergeStockRows,
   type StockContribution,
 } from './pantryInventoryService';
@@ -47,5 +48,62 @@ describe('pantry inventory service', () => {
     ];
 
     expect(canDeleteReceipt(contributions)).toEqual({ allowed: false, reason: 'Receipt stock has already been consumed.' });
+  });
+});
+
+describe('findMergeTarget', () => {
+  const base: PriceStock = { id: 'stock-1', itemId: 'item-1', itemName: 'Eggs', brand: null, packageQuantity: null, packageUnit: null, amount: '6', unit: 'units', priceMajor: 10, expirationDate: null, category: 'Dairy', notes: null, isActive: true, currency: 'PHP' };
+
+  it('matches a manual row (itemId === its own stock id) against a receipt row by normalized name', () => {
+    const receiptRow = { ...base, id: 'stock-r', itemId: 'item-catalog' };
+    const manual = { ...base, id: 'stock-m', itemId: 'stock-m', itemName: '  eggs ' };
+    expect(findMergeTarget([receiptRow], manual)?.id).toBe('stock-r');
+  });
+
+  it('matches by catalog itemId when both rows have real catalog ids even if names differ', () => {
+    const existing = { ...base, itemId: 'item-9', itemName: 'Large Eggs' };
+    const incoming = { ...base, id: 'stock-x', itemId: 'item-9', itemName: 'Eggs' };
+    expect(findMergeTarget([existing], incoming)?.id).toBe('stock-1');
+  });
+
+  it('matches convertible units (g vs kg)', () => {
+    const existing = { ...base, itemName: 'Flour', unit: 'g' };
+    const incoming = { ...base, id: 'stock-x', itemId: 'stock-x', itemName: 'Flour', unit: 'kg' };
+    expect(findMergeTarget([existing], incoming)?.id).toBe('stock-1');
+  });
+
+  it('does not match non-convertible units', () => {
+    const existing = { ...base, unit: 'units' };
+    const incoming = { ...base, id: 'stock-x', itemId: 'stock-x', unit: 'kg' };
+    expect(findMergeTarget([existing], incoming)).toBeUndefined();
+  });
+
+  it('keeps different expiration dates as separate lots, merges equal ones', () => {
+    const lotA = { ...base, expirationDate: '2026-11-01' };
+    const lotB = { ...base, id: 'stock-x', itemId: 'stock-x', expirationDate: '2026-11-05' };
+    expect(findMergeTarget([lotA], lotB)).toBeUndefined();
+    expect(findMergeTarget([lotA], { ...lotB, expirationDate: '2026-11-01' })?.id).toBe('stock-1');
+    expect(findMergeTarget([lotA], { ...lotB, expirationDate: null })).toBeUndefined();
+  });
+
+  it('never matches a row to itself and ignores inactive rows', () => {
+    expect(findMergeTarget([base], base)).toBeUndefined();
+    expect(findMergeTarget([{ ...base, isActive: false }], { ...base, id: 'stock-x', itemId: 'stock-x' })).toBeUndefined();
+  });
+
+  it('does not match across currencies', () => {
+    const existing = { ...base, currency: 'USD' };
+    expect(findMergeTarget([existing], { ...base, id: 'stock-x', itemId: 'stock-x' })).toBeUndefined();
+  });
+});
+
+describe('mergeStockRows with unit conversion', () => {
+  it('converts the incoming amount into the existing unit and weights price per existing unit', () => {
+    const existing: PriceStock = { id: 'stock-1', itemId: 'item-1', itemName: 'Flour', brand: null, packageQuantity: null, packageUnit: null, amount: '500', unit: 'g', priceMajor: 0.1, expirationDate: null, category: 'Baking', notes: null, isActive: true, currency: 'PHP' };
+    const incoming: PriceStock = { ...existing, id: 'stock-2', amount: '1', unit: 'kg', priceMajor: 80 };
+    const merged = mergeStockRows(existing, incoming);
+    expect(merged.unit).toBe('g');
+    expect(merged.amount).toBe('1500');
+    expect(merged.priceMajor).toBeCloseTo((500 * 0.1 + 1000 * 0.08) / 1500, 6);
   });
 });

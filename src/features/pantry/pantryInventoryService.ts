@@ -1,5 +1,6 @@
 import type { PantryItem, Recipe } from '../../types/domain';
 import { convertUnitsStrictDetailed } from '../../lib/units';
+import { normalizeItemName } from '../prices/itemMatching';
 import { openKitchenDatabase, requestResult, transactionDone } from '../../lib/storage/database';
 import { stockToPantry } from '../prices/pantryPriceAdapter';
 import type { PriceEvent, PriceObservation, PriceStock } from '../prices/types';
@@ -50,15 +51,53 @@ export function calculateWeightedAverage(contributions: StockContribution[]): nu
   return quantity > 0 ? value / quantity : 0;
 }
 
+/** Manual rows are created with itemId === their own stock id, so that id is not a catalog reference. */
+function hasCatalogItem(stock: PriceStock): boolean {
+  return stock.itemId !== stock.id && !String(stock.itemId).startsWith('stock-');
+}
+
+function sameItem(a: PriceStock, b: PriceStock): boolean {
+  if (hasCatalogItem(a) && hasCatalogItem(b)) return a.itemId === b.itemId;
+  return normalizeItemName(a.itemName) === normalizeItemName(b.itemName);
+}
+
+/**
+ * Finds the active stock row that `incoming` should be combined into.
+ * Match rule: same item (catalog id when both have one, else normalized name),
+ * same currency, same expiration date (different dates stay separate lots),
+ * and units that can be converted into the existing row's unit.
+ */
+export function findMergeTarget(stocks: PriceStock[], incoming: PriceStock): PriceStock | undefined {
+  const currency = (incoming.currency ?? 'PHP').toUpperCase();
+  return stocks.find((stock) => stock.id !== incoming.id
+    && stock.isActive
+    && (stock.currency ?? 'PHP').toUpperCase() === currency
+    && (stock.expirationDate ?? null) === (incoming.expirationDate ?? null)
+    && sameItem(stock, incoming)
+    && convertUnitsStrictDetailed(1, incoming.unit, stock.unit, stock.itemName).convertible);
+}
+
+/** Converts a quantity expressed in `fromUnit` into `stock.unit` (falls back to the raw number if not convertible). */
+export function toStockUnit(amount: string | number, fromUnit: string, stock: PriceStock): string {
+  const conversion = convertUnitsStrictDetailed(decimal(amount), fromUnit, stock.unit, stock.itemName);
+  return exact(conversion.convertible ? conversion.amount : decimal(amount));
+}
+
 export function mergeStockRows(existing: PriceStock, incoming: PriceStock): PriceStock {
   const existingAmount = decimal(existing.amount);
-  const incomingAmount = decimal(incoming.amount);
+  const conversion = convertUnitsStrictDetailed(decimal(incoming.amount), incoming.unit, existing.unit, existing.itemName);
+  const incomingAmount = conversion.convertible ? conversion.amount : decimal(incoming.amount);
+  // Price is per unit; rescale incoming price-per-unit into price-per-existing-unit.
+  const perUnit = convertUnitsStrictDetailed(1, incoming.unit, existing.unit, existing.itemName);
+  const incomingPrice = perUnit.convertible && perUnit.amount > 0 ? incoming.priceMajor / perUnit.amount : incoming.priceMajor;
   const total = existingAmount + incomingAmount;
   return {
     ...existing,
     amount: exact(total),
-    priceMajor: total > 0 ? ((existingAmount * existing.priceMajor) + (incomingAmount * incoming.priceMajor)) / total : incoming.priceMajor,
+    priceMajor: total > 0 ? ((existingAmount * existing.priceMajor) + (incomingAmount * incomingPrice)) / total : incomingPrice,
+    itemId: hasCatalogItem(existing) || !hasCatalogItem(incoming) ? existing.itemId : incoming.itemId,
     notes: existing.notes ?? incoming.notes,
+    category: existing.category && existing.category !== 'Uncategorized' ? existing.category : incoming.category,
     isActive: total > 0,
   };
 }
