@@ -71,7 +71,7 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
       if (cached.settings?.currency && CURRENCIES.includes(cached.settings.currency as CurrencyCode)) setCurrency(cached.settings.currency as CurrencyCode);
       setLoading(false);
     }
-    if (source.isRemoteConfigured === false && cached) return;
+    // A cached snapshot is only a warm start: the local store is the truth for the pantry.
     try {
       const [loadedRecipes, loadedPantry, loadedMealPlan, loadedCategoryRules] = await Promise.all([source.listRecipes(), source.listPantry(), source.listMealPlan(), source.loadCategoryRules?.() ?? Promise.resolve([])]);
       setRecipes(loadedRecipes);

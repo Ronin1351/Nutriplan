@@ -236,4 +236,18 @@ describe('personal mobile app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Receipts' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Import' })).not.toBeInTheDocument();
   });
+
+  it('refreshes the pantry from the local store even when a cached snapshot exists', async () => {
+    const user = userEvent.setup();
+    const dataSource = createDataSource({ isRemoteConfigured: false, listPantry: vi.fn().mockResolvedValue([]) });
+    const cache: AppCache = {
+      readSnapshot: vi.fn().mockResolvedValue({ recipes: [recipe], pantry: [pantryItem], mealPlan: { Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [] }, settings: { theme: 'dark', currency: 'PHP' } }),
+      writeSnapshot: vi.fn().mockResolvedValue(undefined),
+    };
+    render(<App dataSource={dataSource} cache={cache} />);
+    await screen.findByRole('heading', { name: /planner/i });
+    await user.click(screen.getByRole('button', { name: 'Pantry' }));
+    expect(await screen.findByText('Your pantry is empty')).toBeInTheDocument();
+    expect(dataSource.listPantry).toHaveBeenCalled();
+  });
 });

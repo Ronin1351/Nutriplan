@@ -18,6 +18,7 @@ import type { MealPlan, NewMealPlanEntry, NewPantryItem, NewRecipe, PantryItem, 
 import { createAppCache, type AppCache, type CacheSnapshot } from '../lib/storage/cache';
 import { normalizeCategoryText, type CategoryRule } from '../features/categories/categoryClassifier';
 import { createIndexedDbPriceStore } from '../features/prices/indexedDbPriceStore';
+import { openKitchenDatabase, requestResult, transactionDone } from '../lib/storage/database';
 import type { PriceStore } from '../features/prices/types';
 import { createIndexedDbInventoryService, type InventoryService } from '../features/pantry/pantryInventoryService';
 
@@ -95,19 +96,27 @@ function localId(prefix: string): string {
   try { return `${prefix}-${crypto.randomUUID()}`; } catch { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 }
 
-export function createLocalDataSource(cache: AppCache = createAppCache()): AppDataSource {
+export function createLocalDataSource(cache: AppCache = createAppCache(), options: { indexedDb?: IDBFactory } = {}): AppDataSource {
   let snapshot: CacheSnapshot = { recipes: [], pantry: [], mealPlan: emptyMealPlan(), settings: { theme: 'light', currency: 'PHP' }, categoryRules: [] };
   let hydrated = false;
-  const priceStore = typeof indexedDB !== 'undefined' ? createIndexedDbPriceStore() : undefined;
-  const inventory = typeof indexedDB !== 'undefined' ? createIndexedDbInventoryService() : undefined;
+  const factory = options.indexedDb ?? (typeof indexedDB !== 'undefined' ? indexedDB : undefined);
+  const priceStore = factory ? createIndexedDbPriceStore({ factory }) : undefined;
+  const inventory = factory ? createIndexedDbInventoryService({ factory }) : undefined;
   let priceStockMigrated = false;
   const ensureHydrated = async () => { if (!hydrated) { const existing = await cache.readSnapshot(); snapshot = { ...snapshot, ...(existing ?? {}), categoryRules: existing?.categoryRules ?? [] }; hydrated = true; } };
+  // The one-time copy of the pre-inventory cached pantry into device stock. The marker lives in
+  // IndexedDB, not memory: otherwise every launch after the stock empties would resurrect the cache.
+  const MIGRATION_KEY = 'pantry-migrated-to-price-stock';
+  const readMigrationMarker = async () => { if (!factory) return true; const db = await openKitchenDatabase(factory); const transaction = db.transaction(['price_meta', 'price_items', 'price_events'], 'readonly'); const [marker, itemCount, eventCount] = await Promise.all([requestResult(transaction.objectStore('price_meta').get(MIGRATION_KEY)), requestResult(transaction.objectStore('price_items').count()), requestResult(transaction.objectStore('price_events').count())]); await transactionDone(transaction); return Boolean(marker) || itemCount > 0 || eventCount > 0; };
+  const writeMigrationMarker = async () => { if (!factory) return; const db = await openKitchenDatabase(factory); const transaction = db.transaction('price_meta', 'readwrite'); transaction.objectStore('price_meta').put({ at: new Date().toISOString() }, MIGRATION_KEY); await transactionDone(transaction); };
   const ensurePriceStock = async () => {
     await ensureHydrated();
     if (!priceStore || priceStockMigrated) return;
+    priceStockMigrated = true;
+    if (await readMigrationMarker()) return;
     const existing = await priceStore.listStock();
     if (existing.length === 0 && snapshot.pantry.length > 0) for (const item of snapshot.pantry) await priceStore.createStock(item);
-    priceStockMigrated = true;
+    await writeMigrationMarker();
   };
   const persist = () => cache.writeSnapshot(snapshot);
   return {
