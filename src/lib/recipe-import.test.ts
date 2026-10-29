@@ -100,6 +100,52 @@ describe('parseRecipeText', () => {
   });
 });
 
+describe('parseRecipeContent on a whole-page paste in Allrecipes layout', () => {
+  const pasted = `Skip to content
+Allrecipes
+Authentic Cincinnati Chili
+4.6
+(290)
+Prep Time: 15 mins
+Cook Time: 1 hr 30 mins
+Total Time: 1 hr 45 mins
+Servings: 6
+Jump to Nutrition Facts
+Ingredients
+1 quart water, or more as needed
+2 pounds lean ground beef
+2 (6 ounce) cans tomato paste
+1 ½ teaspoons ground cumin
+½ teaspoon ground cinnamon
+Directions
+Step 1
+Gather all ingredients.
+Dotdash Meredith Food Studios
+Step 2
+Bring the water and beef to a boil in a large pot.
+Step 3
+Stir in tomato paste, cumin and cinnamon; simmer for 1 hour.
+I Made It
+Nutrition Facts (per serving)
+210 Calories
+12g Fat`;
+
+  it('finds the title above the metadata, parses every ingredient, and keeps only the step text', () => {
+    const draft = parseRecipeContent(pasted);
+    expect(draft.name).toBe('Authentic Cincinnati Chili');
+    expect(draft.servings).toBe(6);
+    expect(draft.prepTime).toBe(105);
+    expect(draft.ingredients).toEqual([
+      { amount: 1, unit: '', item: 'quart water, or more as needed' },
+      { amount: 2, unit: 'lb', item: 'lean ground beef' },
+      { amount: 12, unit: 'oz', item: 'tomato paste' },
+      { amount: 1.5, unit: 'tsp', item: 'ground cumin' },
+      { amount: 0.5, unit: 'tsp', item: 'ground cinnamon' },
+    ]);
+    expect(draft.instructions).toBe('Gather all ingredients.\nBring the water and beef to a boil in a large pot.\nStir in tomato paste, cumin and cinnamon; simmer for 1 hour.');
+  });
+});
+
 describe('importRecipeFromUrl', () => {
   it('re-parses the raw ingredient lines returned by the API with the full client parser', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({

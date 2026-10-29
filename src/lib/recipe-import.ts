@@ -121,17 +121,40 @@ function fromBoundedSelectors(document: Document, sourceUrl?: string): RecipeImp
   return parseRecipeValues({ name, ingredients, instructions, image: document.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? '', sourceUrl });
 }
 
+const INGREDIENT_HEADING = /^(ingredients?|what you need|you will need)\b/i;
+const DIRECTION_HEADING = /^(instructions?|directions?|method|steps?|preparation|how to make( it)?)\b/i;
+const END_HEADING = /^(nutrition( facts)?|notes?|cook'?s? notes?|tips?|equipment|i made it|rate|reviews?|related|you might also like|more recipes|print|share|save)\b/i;
+const METADATA_LINE = /^(prep(aration)? time|cook(ing)? time|total time|additional time|servings?|serves|yield|course|cuisine|calories|author|by\b|published|updated|jump to|skip to|home|recipes?|log ?in|sign ?(in|up)|search|menu|advertisement)/i;
+const NOISE_LINE = /^(step\s*\d+|\d+(\.\d+)?|\(\d[\d,]*\)|[\d.]+\s*\(\d[\d,]*\)|.*(food studios|photo by|credit:).*)$/i;
+
+/**
+ * Pasted page text in the order a person reads it: a title, some metadata, then an "Ingredients"
+ * heading, the ingredient lines, a "Directions" heading, the steps, and page chrome after that.
+ */
 function fromPlainText(content: string, sourceUrl?: string): RecipeImportDraft {
   const lines = content.split(/\r?\n/).map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).filter(Boolean);
   const heading = (line: string, pattern: RegExp) => pattern.test(line.replace(/[:#]/g, '').trim());
-  const ingredientStart = lines.findIndex((line) => heading(line, /^(ingredients?|what you need)\b/i));
-  const instructionStart = lines.findIndex((line, index) => index > ingredientStart && heading(line, /^(instructions?|directions?|method|steps?)\b/i));
-  const name = (ingredientStart > 0 ? lines.slice(0, ingredientStart) : lines).find((line) => !heading(line, /^(ingredients?|instructions?|directions?|method|steps?)\b/i)) ?? '';
+  const ingredientStart = lines.findIndex((line) => heading(line, INGREDIENT_HEADING));
+  const instructionStart = lines.findIndex((line, index) => index > ingredientStart && heading(line, DIRECTION_HEADING));
+  const ingredientEnd = lines.findIndex((line, index) => index > ingredientStart && (heading(line, DIRECTION_HEADING) || heading(line, END_HEADING)));
+  const instructionEnd = lines.findIndex((line, index) => index > instructionStart && heading(line, END_HEADING));
+
+  const metadata = (ingredientStart > 0 ? lines.slice(0, ingredientStart) : lines);
+  const field = (pattern: RegExp) => metadata.map((line) => line.match(pattern)?.[1]).find(Boolean);
+  const servings = field(/^(?:servings?|serves|yield):?\s*(\d+)/i);
+  const totalTime = field(/^total time:?\s*(.+)$/i);
+  const prepTime = field(/^prep(?:aration)? time:?\s*(.+)$/i);
+  const cookTime = field(/^cook(?:ing)? time:?\s*(.+)$/i);
+  const isTitle = (line: string) => !heading(line, INGREDIENT_HEADING) && !heading(line, DIRECTION_HEADING) && !METADATA_LINE.test(line) && !NOISE_LINE.test(line) && /[A-Za-z]/.test(line) && line.split(/\s+/).length >= 2;
+  const name = metadata.find(isTitle) ?? metadata.find((line) => /[A-Za-z]/.test(line) && !heading(line, INGREDIENT_HEADING)) ?? '';
+
   const ingredientLines = ingredientStart >= 0
-    ? lines.slice(ingredientStart + 1, instructionStart >= 0 ? instructionStart : lines.length)
+    ? lines.slice(ingredientStart + 1, ingredientEnd >= 0 ? ingredientEnd : lines.length)
     : lines.filter((line) => /^(?:\d|[¼½¾⅓⅔])/.test(line));
-  const instructionLines = instructionStart >= 0 ? lines.slice(instructionStart + 1) : [];
-  return parseRecipeValues({ name, ingredients: ingredientLines, instructions: instructionLines, sourceUrl });
+  const instructionLines = instructionStart >= 0
+    ? lines.slice(instructionStart + 1, instructionEnd >= 0 ? instructionEnd : lines.length).filter((line) => !NOISE_LINE.test(line))
+    : [];
+  return parseRecipeValues({ name, ingredients: ingredientLines, instructions: instructionLines, servings, prepTime, cookTime, totalTime, sourceUrl });
 }
 
 export function parseRecipeContent(content: string, sourceUrl?: string): RecipeImportDraft {
