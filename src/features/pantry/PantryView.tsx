@@ -72,7 +72,7 @@ export default function PantryView({ pantry, currency, onCreate, onUpdate, onRem
     }
     if (entryType === 'quote') {
       const today = new Date().toISOString().slice(0, 10);
-      await onQuote({ operationId: `manual-${crypto.randomUUID()}`, kind: 'quote', source: 'manual', occurredOn: today, dateEstimated: false, capturedAt: new Date().toISOString(), currency, merchantName: null, receiptNumber: null, lines: [{ lineId: `manual-line-${crypto.randomUUID()}`, ordinal: 0, itemName: item.item, quantity: String(item.amount), unit: item.unit, paidMinor: toMinorUnits(String(item.price), currency), packageQuantity: null, packageUnit: null }] });
+      await onQuote({ operationId: `manual-${crypto.randomUUID()}`, kind: 'quote', source: 'manual', occurredOn: today, dateEstimated: false, capturedAt: new Date().toISOString(), currency, merchantName: null, receiptNumber: null, lines: [{ lineId: `manual-line-${crypto.randomUUID()}`, ordinal: 0, itemName: item.item, quantity: String(item.amount), unit: item.unit, paidMinor: toMinorUnits((item.price * item.amount).toFixed(2), currency), packageQuantity: null, packageUnit: null }] });
       return;
     }
     await onCreate(item);

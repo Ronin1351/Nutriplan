@@ -124,4 +124,19 @@ describe('indexedDb price store collisions', () => {
     expect(renamed.catalogItemId).toBe(milk.catalogItemId);
     expect((await inventory.listPurchaseLines()).every((line) => line.itemName === 'Milk')).toBe(true);
   });
+
+  it('a receipt line of 3 @ 44 = 132 stores a unit price of 44, not 132', async () => {
+    const { store } = setup();
+    await store.saveCapture({ operationId: 'op-g', kind: 'purchase', source: 'manual', occurredOn: '2026-10-01', dateEstimated: false, capturedAt: '2026-10-01T00:00:00.000Z', currency: 'PHP', merchantName: 'IFM', receiptNumber: null, lines: [{ lineId: 'l1', ordinal: 0, itemName: 'Gatorade', quantity: '3', unit: 'units', paidMinor: 13200, packageQuantity: null, packageUnit: null }] });
+    const [row] = await store.listStock();
+    expect(row.price).toBe(44);
+    expect(row.amount * row.price).toBe(132);
+  });
+
+  it('a manual add of 5 kg at 55 records a 275 line total so later averaging is right', async () => {
+    const { store, inventory } = setup();
+    await store.createStock(pantry({ item: 'Rice', amount: 5, unit: 'kg', price: 55 }));
+    expect((await inventory.listReceipts())[0].totalMinor).toBe(27500);
+    expect((await store.listStock())[0].price).toBe(55);
+  });
 });

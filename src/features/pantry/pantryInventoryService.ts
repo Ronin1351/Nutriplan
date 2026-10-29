@@ -214,6 +214,43 @@ async function readAll<T>(store: IDBObjectStore): Promise<T[]> {
   return (await requestResult(store.getAll())) as T[];
 }
 
+/**
+ * Removes stock that nothing supports any more: contributions whose receipt was deleted are dropped
+ * (and their quantity subtracted), and a row with no contributions and no receipt line for its item
+ * is removed outright. Runs inside the caller's readwrite transaction.
+ */
+export async function reconcileStock(transaction: IDBTransaction): Promise<void> {
+  const stockStore = transaction.objectStore('price_stock');
+  const contributionStore = transaction.objectStore('price_stock_contributions');
+  const [stocks, contributions, events, observations] = await Promise.all([
+    readAll<PriceStock>(stockStore),
+    readAll<StockContribution>(contributionStore),
+    readAll<PriceEvent>(transaction.objectStore('price_events')),
+    readAll<PriceObservation>(transaction.objectStore('price_observations')),
+  ]);
+  const eventIds = new Set(events.map((event) => event.id));
+  const observedItems = new Set(observations.map((observation) => observation.itemId));
+  const live = new Map<string, StockContribution[]>();
+  for (const contribution of contributions) {
+    if (!eventIds.has(contribution.eventId)) { contributionStore.delete(contribution.id); continue; }
+    live.set(contribution.stockId, [...(live.get(contribution.stockId) ?? []), contribution]);
+  }
+  for (const stock of stocks) {
+    const supporting = live.get(stock.id) ?? [];
+    const hadContributions = contributions.some((contribution) => contribution.stockId === stock.id);
+    if (supporting.length === 0) {
+      if (hadContributions || !observedItems.has(stock.itemId)) stockStore.delete(stock.id);
+      continue;
+    }
+    if (supporting.length === contributions.filter((contribution) => contribution.stockId === stock.id).length) continue;
+    const remaining = supporting.reduce((sum, contribution) => sum + Math.max(0, decimal(contribution.quantity) - decimal(contribution.consumedQuantity)), 0);
+    const averageMinor = calculateWeightedAverage(supporting);
+    stockStore.put({ ...stock, amount: exact(remaining), isActive: remaining > 0, priceMajor: averageMinor / ((stock.currency ?? 'PHP').toUpperCase() === 'JPY' ? 1 : 100) }, stock.id);
+  }
+}
+
+export const RECONCILE_STORES = ['price_stock', 'price_stock_contributions', 'price_events', 'price_observations'] as const;
+
 function id(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
@@ -225,8 +262,11 @@ export function createIndexedDbInventoryService(options: IndexedDbInventoryServi
   return {
     async listCurrentStock() {
       const db = await open();
-      const transaction = db.transaction('price_stock', 'readonly');
-      return (await readAll<PriceStock>(transaction.objectStore('price_stock'))).map(stockToPantry);
+      const transaction = db.transaction([...RECONCILE_STORES], 'readwrite');
+      await reconcileStock(transaction);
+      const stocks = await readAll<PriceStock>(transaction.objectStore('price_stock'));
+      await transactionDone(transaction);
+      return stocks.map(stockToPantry);
     },
 
     async listReceipts() {

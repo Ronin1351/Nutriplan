@@ -4,7 +4,7 @@ import { matchItem, normalizeItemName } from './itemMatching';
 import { minorToMajor, pantryToStock, stockToPantry } from './pantryPriceAdapter';
 import type { CatalogItem, EventCorrection, ItemAlias, Merchant, ObservationCorrection, PriceCapture, PriceEvent, PriceExport, PriceHistoryPoint, PriceHistoryQuery, PriceObservation, PriceStore, PriceStock, PriceSummary, SaveCaptureResult } from './types';
 import { openKitchenDatabase, requestResult, transactionDone } from '../../lib/storage/database';
-import { findMergeTarget, mergeStockRows, toStockUnit, type StockContribution } from '../pantry/pantryInventoryService';
+import { findMergeTarget, mergeStockRows, reconcileStock, RECONCILE_STORES, toStockUnit, type StockContribution } from '../pantry/pantryInventoryService';
 import { convertUnitsStrictDetailed, normalizeUnit } from '../../lib/units';
 
 function id(prefix: string): string {
@@ -71,7 +71,8 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
         const observation: PriceObservation = { id: id('observation'), eventId: event.id, itemId: item.id, lineId: line.lineId, ordinal: line.ordinal, quantity: line.quantity, unit: line.unit, paidMinor: line.paidMinor, packageQuantity: line.packageQuantity ?? null, packageUnit: line.packageUnit ?? null, revision: 0 };
         observationsStore.put(observation, observation.id);
         if (input.kind === 'purchase') {
-          const addedPriceMajor = minorToMajor(line.paidMinor, input.currency);
+          const lineQuantity = Number(line.quantity) || 1;
+          const addedPriceMajor = minorToMajor(line.paidMinor, input.currency) / lineQuantity;
           const incoming: PriceStock = { id: id('stock'), itemId: item.id, itemName: item.name, brand: item.brand, packageQuantity: item.packageQuantity, packageUnit: item.packageUnit, amount: line.quantity, unit: line.unit, priceMajor: addedPriceMajor, expirationDate: null, category: item.category, notes: input.merchantName?.trim() || null, isActive: true, currency: input.currency };
           const existing = findMergeTarget(stocks, incoming);
           const stock = existing ? mergeStockRows(existing, incoming) : incoming;
@@ -108,7 +109,14 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
       const db = await open(); const transaction = db.transaction('price_events', 'readwrite'); const store = transaction.objectStore('price_events'); const current = await requestResult(store.get(eventId)) as PriceEvent | undefined; if (!current || current.revision !== expectedRevision) throw new Error('This price event changed elsewhere.'); const updated = { ...current, occurredOn: changes.occurredOn ?? current.occurredOn, dateEstimated: changes.dateEstimated ?? current.dateEstimated, revision: current.revision + 1 }; store.put(updated, eventId); await transactionDone(transaction); return updated;
     },
     async exportRecords(): Promise<PriceExport> { const [items, aliases, merchants, events, observations, stock] = await Promise.all([read<CatalogItem>('price_items'), read<ItemAlias>('price_aliases'), read<Merchant>('price_merchants'), read<PriceEvent>('price_events'), read<PriceObservation>('price_observations'), read<PriceStock>('price_stock')]); return { schemaVersion: 2, items, aliases, merchants, events, observations, stock }; },
-    async listStock() { return (await read<PriceStock>('price_stock')).map(stockToPantry); },
+    async listStock() {
+      const db = await open();
+      const transaction = db.transaction([...RECONCILE_STORES], 'readwrite');
+      await reconcileStock(transaction);
+      const stocks = await all<PriceStock>(transaction.objectStore('price_stock'));
+      await transactionDone(transaction);
+      return stocks.map(stockToPantry);
+    },
     async createStock(input: NewPantryItem) {
       const db = await open();
       const transaction = db.transaction(['price_stock', 'price_events', 'price_observations', 'price_stock_contributions', 'price_items', 'price_aliases'], 'readwrite');
@@ -128,10 +136,10 @@ export function createIndexedDbPriceStore(options: IndexedDbPriceStoreOptions = 
       stockStore.put(stock, stock.id);
       const event: PriceEvent = { id: id('event'), operationId: id('manual'), kind: 'purchase', source: 'manual', occurredOn: new Date().toISOString().slice(0, 10), dateEstimated: true, capturedAt: new Date().toISOString(), currency: 'PHP', merchantId: null, receiptNumber: null, fingerprint: '', revision: 0 };
       eventStore.put(event, event.id);
-      const observation: PriceObservation = { id: id('observation'), eventId: event.id, itemId: stock.itemId, lineId: id('manual-line'), ordinal: 0, quantity: String(input.amount), unit: input.unit, paidMinor: Math.round(input.price * 100), packageQuantity: null, packageUnit: null, revision: 0 };
+      const observation: PriceObservation = { id: id('observation'), eventId: event.id, itemId: stock.itemId, lineId: id('manual-line'), ordinal: 0, quantity: String(input.amount), unit: input.unit, paidMinor: Math.round(input.price * input.amount * 100), packageQuantity: null, packageUnit: null, revision: 0 };
       observationStore.put(observation, observation.id);
       const contributionId = id('contribution');
-      contributionStore.put({ id: contributionId, stockId: stock.id, eventId: event.id, observationId: observation.id, quantity: toStockUnit(input.amount, input.unit, stock), consumedQuantity: '0', paidMinor: Math.round(input.price * 100), currency: 'PHP', occurredOn: event.occurredOn, capturedAt: event.capturedAt }, contributionId);
+      contributionStore.put({ id: contributionId, stockId: stock.id, eventId: event.id, observationId: observation.id, quantity: toStockUnit(input.amount, input.unit, stock), consumedQuantity: '0', paidMinor: Math.round(input.price * input.amount * 100), currency: 'PHP', occurredOn: event.occurredOn, capturedAt: event.capturedAt }, contributionId);
       await transactionDone(transaction);
       return stockToPantry(stock);
     },

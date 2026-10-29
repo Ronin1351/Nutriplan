@@ -186,4 +186,28 @@ describe('inventory purchase lines and receipt totals', () => {
     await inventory.deleteReceiptLine(saved.eventId, detail!.lines[0].id, 0);
     expect(await store.listStock()).toEqual([]);
   });
+
+  it('reconcile drops stock rows that no receipt line or contribution supports', async () => {
+    const { store, inventory, factory } = setup();
+    await store.createStock({ userId: 'u', item: 'Rice', amount: 5, unit: 'kg', price: 55, expirationDate: null, category: 'Grains', notes: null, isActive: true });
+    // Simulate a legacy row created before contribution tracking, whose receipt was deleted.
+    const db = await openKitchenDatabase(factory);
+    const transaction = db.transaction('price_stock', 'readwrite');
+    transaction.objectStore('price_stock').put({ id: 'stock-legacy', itemId: 'item-gone', itemName: 'GATORADE', brand: null, packageQuantity: null, packageUnit: null, amount: '3', unit: 'units', priceMajor: 132, expirationDate: null, category: 'Beverages', notes: null, isActive: true, currency: 'PHP' }, 'stock-legacy');
+    await transactionDone(transaction);
+    expect((await store.listStock()).map((row) => row.item)).toEqual(['Rice']);
+    expect((await inventory.listCurrentStock()).map((row) => row.item)).toEqual(['Rice']);
+  });
+
+  it('reconcile removes contributions whose receipt no longer exists and adjusts the row', async () => {
+    const { store, factory } = setup();
+    await store.saveCapture(capture({ occurredOn: '2026-10-01', lines: [line('Eggs', 1200, '12')] }));
+    const second = await store.saveCapture(capture({ occurredOn: '2026-10-02', lines: [line('Eggs', 600, '6')] }));
+    const db = await openKitchenDatabase(factory);
+    const transaction = db.transaction(['price_events'], 'readwrite');
+    transaction.objectStore('price_events').delete(second.eventId);
+    await transactionDone(transaction);
+    const [eggs] = await store.listStock();
+    expect(eggs.amount).toBe(12);
+  });
 });
