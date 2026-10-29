@@ -5,7 +5,7 @@ import RecipesView from '../features/recipes/RecipesView';
 import PantryView from '../features/pantry/PantryView';
 import MealPlannerView from '../features/meal-plan/MealPlannerView';
 import ShoppingListView from '../features/shopping-list/ShoppingListView';
-import ImportHub from '../features/receipt/ImportHub';
+import ReceiptsView from '../features/receipts/ReceiptsView';
 import type { ReceiptDraft } from '../features/receipt/receiptParser';
 import type { MealPlan, NewPantryItem, NewRecipe, PantryItem, Recipe } from '../types/domain';
 import { CURRENCY_SYMBOLS, type CurrencyCode } from '../lib/currency';
@@ -34,7 +34,8 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
   const [cache] = useState<AppCache>(() => providedCache ?? createAppCache());
   const [source] = useState<AppDataSource>(() => dataSource ?? (isSupabaseConfigured() ? createSupabaseDataSource({ cache }) : createLocalDataSource(cache)));
   const [localSource] = useState<AppDataSource>(() => createLocalDataSource(cache));
-  const [activeSection, setActiveSection] = useState<OrbitalSection>('recipes');
+  const [activeSection, setActiveSection] = useState<OrbitalSection>('plan');
+  const [pendingReceiptId, setPendingReceiptId] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan>(emptyMealPlan);
@@ -175,6 +176,8 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
     }
   }
 
+  const clearPendingReceipt = useCallback(() => setPendingReceiptId(null), []);
+
   async function recordQuote(capture: PriceCapture) {
     if (!source.prices) { setError('Price quotes need local inventory storage.'); return; }
     await source.prices.saveCapture(capture);
@@ -203,7 +206,6 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
       const refreshed = await source.listPantry();
       setPantry(refreshed);
       await writeCache({ recipes, pantry: refreshed, mealPlan });
-      setActiveSection('pantry');
       return;
     }
     const imported: PantryItem[] = [];
@@ -222,7 +224,6 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
     const next = [...pantry, ...imported];
     setPantry(next);
     await writeCache({ recipes, pantry: next, mealPlan });
-    setActiveSection('pantry');
   }
 
   return (
@@ -233,9 +234,8 @@ export default function App({ dataSource, cache: providedCache }: AppProps) {
       </header>
       <OrbitalNav activeSection={activeSection} onChange={setActiveSection} />
       <main className="app-main">
-        {loading ? <div className="state-panel"><span className="loading-dot" aria-hidden="true" /><h1>Loading your kitchen…</h1><p>Getting your recipes and pantry ready.</p></div> : error ? <div className="state-panel error-state" role="alert"><span aria-hidden="true">!</span><h1>Couldn’t load your kitchen</h1><p>{error}</p><button className="button primary" onClick={() => { setError(null); void loadData(); }}>Retry</button></div> : activeSection === 'recipes' ? <RecipesView recipes={recipes} pantry={pantry} currency={currency} onCreate={createRecipe} onUpdate={updateRecipe} onRemove={removeRecipe} onImport={createRecipe} onImportRecipes={importRecipes} /> : activeSection === 'pantry' ? <PantryView pantry={pantry} currency={currency} onCreate={createPantryItem} onUpdate={updatePantryItem} onRemove={removePantryItem} onSaveNotes={savePantryNotes} onQuote={recordQuote} onFindCollision={findStockCollision} onMerge={mergeStock} priceStore={source.prices} inventory={source.inventory} /> : activeSection === 'planner' ? <MealPlannerView recipes={recipes} mealPlan={mealPlan} onChange={saveMealPlan} onCook={cookRecipe} /> : activeSection === 'shopping' ? <ShoppingListView recipes={recipes} pantry={pantry} mealPlan={mealPlan} /> : <ImportHub categoryRules={categoryRules} onSaveRecipe={createRecipe} onSaveReceipt={importReceipt} onCancel={() => setActiveSection('recipes')} />}
+        {loading ? <div className="state-panel"><span className="loading-dot" aria-hidden="true" /><h1>Loading your kitchen…</h1><p>Getting your recipes and pantry ready.</p></div> : error ? <div className="state-panel error-state" role="alert"><span aria-hidden="true">!</span><h1>Couldn’t load your kitchen</h1><p>{error}</p><button className="button primary" onClick={() => { setError(null); void loadData(); }}>Retry</button></div> : activeSection === 'plan' ? <MealPlannerView recipes={recipes} mealPlan={mealPlan} onChange={saveMealPlan} onCook={cookRecipe} /> : activeSection === 'shopping' ? <ShoppingListView recipes={recipes} pantry={pantry} mealPlan={mealPlan} /> : activeSection === 'pantry' ? <PantryView pantry={pantry} currency={currency} onCreate={createPantryItem} onUpdate={updatePantryItem} onRemove={removePantryItem} onSaveNotes={savePantryNotes} onQuote={recordQuote} onFindCollision={findStockCollision} onMerge={mergeStock} onOpenReceipt={(eventId) => { setPendingReceiptId(eventId); setActiveSection('receipts'); }} priceStore={source.prices} inventory={source.inventory} /> : activeSection === 'recipes' ? <RecipesView recipes={recipes} pantry={pantry} currency={currency} onCreate={createRecipe} onUpdate={updateRecipe} onRemove={removeRecipe} onImport={createRecipe} onImportRecipes={importRecipes} /> : source.inventory ? <ReceiptsView inventory={source.inventory} currency={currency} categoryRules={categoryRules} onSaveReceipt={importReceipt} openEventId={pendingReceiptId} onOpened={clearPendingReceipt} /> : <section className="content-section"><div className="section-toolbar"><div><h2>Receipts</h2></div></div><div className="empty-state"><h3>Receipts need device storage</h3><p>Receipt history is kept on this device and is unavailable in this environment.</p></div></section>}
       </main>
-      <footer className="app-footer">Nutriplan · built for your everyday kitchen</footer>
     </div>
   );
 }
