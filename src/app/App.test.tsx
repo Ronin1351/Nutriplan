@@ -80,7 +80,8 @@ describe('personal mobile app shell', () => {
     render(<App dataSource={dataSource} />);
 
     expect(await screen.findByRole('heading', { name: 'Recipes' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Add recipe/i }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('menuitem', { name: 'New recipe' }));
     await user.type(screen.getByLabelText('Recipe name'), 'Rice Bowl');
     await user.type(screen.getByLabelText('Ingredients'), '1 cup rice');
     await user.type(screen.getByLabelText('Instructions'), 'Cook rice.');
@@ -163,8 +164,8 @@ describe('personal mobile app shell', () => {
     render(<App dataSource={dataSource} />);
 
     await screen.findByRole('heading', { name: 'Recipes' });
-    await user.click(screen.getByRole('button', { name: 'Import recipe' }));
-    await user.click(screen.getByRole('button', { name: 'Paste content' }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Paste text' }));
     await user.type(screen.getByLabelText('Recipe content'), '<h1>Toast</h1><ul><li>1 slice bread</li></ul>');
     await user.click(screen.getByRole('button', { name: 'Parse recipe' }));
 
@@ -203,7 +204,8 @@ describe('personal mobile app shell', () => {
     render(<App dataSource={dataSource} />);
 
     await screen.findByRole('heading', { name: 'Recipes' });
-    await user.click(screen.getByRole('button', { name: 'Import recipe' }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('menuitem', { name: 'From URL' }));
     await user.type(screen.getByLabelText('Recipe URL'), 'https://example.com/soup');
     await user.click(screen.getByRole('button', { name: 'Parse recipe' }));
 
