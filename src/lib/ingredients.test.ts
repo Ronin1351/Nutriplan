@@ -25,4 +25,13 @@ describe('parseIngredientLine on recipe-site ingredient text', () => {
   it('drops alternative lines that start with "or"', () => {
     expect(normalizeIngredients(['1 packet ranch seasoning', 'or 3 tbsp ranch seasoning from a jar', '½ cup milk']).map((ingredient) => ingredient.item)).toEqual(['ranch seasoning', 'milk']);
   });
+
+  it('handles the Hidden Valley page as published', () => {
+    expect(parseIngredientLine('1 box (12 oz.) elbow macaroni or any pasta cut')).toEqual({ amount: 12, unit: 'oz', item: 'elbow macaroni or any pasta cut' });
+    expect(parseIngredientLine('1 package (8 or 9 slices) precooked bacon')).toEqual({ amount: 1, unit: 'unit', item: 'precooked bacon' });
+    expect(parseIngredientLine('2 small cans sliced olives (or one large one)')).toEqual({ amount: 2, unit: 'unit', item: 'sliced olives' });
+    expect(parseIngredientLine('1 packet Hidden Valley™ Original Ranch™ Seasoning, Dressing & Recipe Mix')).toEqual({ amount: 1, unit: 'unit', item: 'Hidden Valley Original Ranch Seasoning, Dressing & Recipe Mix' });
+    expect(parseIngredientLine('½ teaspoon garlic powder')).toEqual({ amount: 0.5, unit: 'tsp', item: 'garlic powder' });
+    expect(parseIngredientLine('2 cups sliced yellow and red grape tomatoes')).toEqual({ amount: 2, unit: 'cup', item: 'sliced yellow and red grape tomatoes' });
+  });
 });

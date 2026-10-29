@@ -40,6 +40,11 @@ function cleanLine(line: string): string {
     .trim();
 }
 
+/** Drops bracketed asides such as "(or one large one)" and a leading "of". */
+function stripNotes(text: string): string {
+  return text.replace(/\s*\((?:or|optional|about|approx|approximately|see|note)[^)]*\)/gi, '').replace(/^of\s+/i, '').replace(/\s+/g, ' ').trim();
+}
+
 function parseAmount(text: string): number {
   if (/^\d+\s+\d+\/\d+$/.test(text)) { const [whole, fraction] = text.split(/\s+/); const [n, d] = fraction.split('/').map(Number); return Number(whole) + n / d; }
   if (/^\d+\s+0\.\d+$/.test(text)) { const [whole, part] = text.split(/\s+/); return Number(whole) + Number(part); }
@@ -54,19 +59,23 @@ export function parseIngredientLine(line: string): Ingredient {
   let remaining = normalized;
   if (amountMatch) { amount = parseAmount(amountMatch[1]); remaining = normalized.slice(amountMatch[0].length).trim(); }
 
-  // "1 (12 oz.) package elbow macaroni": the parenthetical size is the real measure, times the count.
-  const packageSize = remaining.match(/^\(\s*(\d+(?:\.\d+)?)\s*-?\s*([A-Za-z]+)\.?\s*\)\s*/);
-  if (packageSize && UNIT_ALIASES[packageSize[2].toLowerCase()] && UNIT_ALIASES[packageSize[2].toLowerCase()] !== 'unit') {
-    const sizeUnit = UNIT_ALIASES[packageSize[2].toLowerCase()];
-    const rest = remaining.slice(packageSize[0].length).replace(PACKAGE_WORDS, '').trim();
-    return { amount: Math.round(amount * Number(packageSize[1]) * 100) / 100, unit: sizeUnit, item: rest.replace(/^of\s+/i, '').trim() };
+  // Size adjectives before a count noun ("2 small cans") carry no measure.
+  remaining = remaining.replace(/^(?:small|medium|large|extra[- ]large)\s+(?=\w)/i, '');
+  // "1 (12 oz.) package elbow macaroni" or "1 box (12 oz.) elbow macaroni": the parenthetical size is the real measure, times the count.
+  const leadingPackage = remaining.match(PACKAGE_WORDS)?.[0] ?? '';
+  const afterPackage = remaining.slice(leadingPackage.length);
+  const packageSize = afterPackage.match(/^\(\s*(\d+(?:\.\d+)?)\s*-?\s*([A-Za-z]+)\.?\s*\)\s*/);
+  const sizeUnit = packageSize ? UNIT_ALIASES[packageSize[2].toLowerCase()] : undefined;
+  if (packageSize && sizeUnit && sizeUnit !== 'unit') {
+    const rest = afterPackage.slice(packageSize[0].length).replace(PACKAGE_WORDS, '').trim();
+    return { amount: Math.round(amount * Number(packageSize[1]) * 100) / 100, unit: sizeUnit, item: stripNotes(rest) };
   }
-  // Any other parenthetical right after the amount is a note ("(8 or 9 slices)"), not a measure.
-  remaining = remaining.replace(/^\([^)]*\)\s*/, '').trim();
+  // Any other parenthetical right after the amount or package word is a note ("(8 or 9 slices)"), not a measure.
+  remaining = (leadingPackage + afterPackage.replace(/^\([^)]*\)\s*/, '')).trim();
 
   const [firstToken = '', ...rest] = remaining.split(/\s+/);
   const unit = UNIT_ALIASES[firstToken.toLowerCase().replace(/\.$/, '')] ?? '';
-  const item = (unit ? rest.join(' ') : remaining).replace(/^of\s+/i, '').trim();
+  const item = stripNotes(unit ? rest.join(' ') : remaining);
 
   return { amount: Math.round(amount * 100) / 100, unit, item };
 }
